@@ -10,6 +10,7 @@ export const GameDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'critic' | 'user'>('critic');
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -81,19 +82,31 @@ export const GameDetailPage: React.FC = () => {
       </Link>
 
       <div className="detail-header">
-        {game.cover_url ? (
-          <img src={game.cover_url} alt={game.title} className="detail-cover" />
-        ) : (
-          <div
+        {Boolean(game.cover_url) && !imageError ? (
+          <img
+            src={game.cover_url!}
+            alt={game.title}
             className="detail-cover"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--text-muted)',
-            }}
-          >
-            No Cover Available
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <div className="detail-cover detail-cover-placeholder">
+            <svg
+              className="detail-cover-placeholder-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="2" y="6" width="20" height="12" rx="2" />
+              <path d="M6 12h4m-2-2v4" />
+              <circle cx="17" cy="10" r="0.5" fill="currentColor" />
+              <circle cx="15" cy="13" r="0.5" fill="currentColor" />
+            </svg>
+            <span className="detail-cover-placeholder-text">No Cover Available</span>
           </div>
         )}
 

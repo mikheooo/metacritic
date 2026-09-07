@@ -256,3 +256,165 @@ def test_parse_game_platform_pollution_regression_fixture() -> None:
     # Verify review count strings are not in platform names
     for name in platform_names:
         assert not is_navigation_or_category_label(name), f"Invalid platform name: {name}"
+
+
+def test_cover_extraction_json_ld_string() -> None:
+    """Verify cover extraction from direct JSON-LD image string."""
+    html = """
+    <html><head>
+    <script type="application/ld+json">
+    {"@context": "https://schema.org", "@type": "VideoGame", "name": "Test Game", "image": "https://www.metacritic.com/a/img/cover1.jpg"}
+    </script>
+    </head><body><h1 data-testid="hero-title">Test Game</h1></body></html>
+    """
+    details = MetacriticParser.parse_game_details(
+        html, "https://www.metacritic.com/game/test-game/"
+    )
+    assert details.cover_url == "https://www.metacritic.com/a/img/cover1.jpg"
+
+
+def test_cover_extraction_json_ld_dict() -> None:
+    """Verify cover extraction from JSON-LD ImageObject dict."""
+    html = """
+    <html><head>
+    <script type="application/ld+json">
+    {"@type": "VideoGame", "name": "Test Game", "image": {"@type": "ImageObject", "url": "https://www.metacritic.com/a/img/cover2.jpg"}}
+    </script>
+    </head><body></body></html>
+    """
+    details = MetacriticParser.parse_game_details(
+        html, "https://www.metacritic.com/game/test-game/"
+    )
+    assert details.cover_url == "https://www.metacritic.com/a/img/cover2.jpg"
+
+
+def test_cover_extraction_json_ld_list() -> None:
+    """Verify cover extraction from JSON-LD list of images."""
+    html = """
+    <html><head>
+    <script type="application/ld+json">
+    {"@type": "VideoGame", "name": "Test Game", "image": ["https://www.metacritic.com/a/img/cover3.jpg", "https://www.metacritic.com/a/img/cover3_alt.jpg"]}
+    </script>
+    </head><body></body></html>
+    """
+    details = MetacriticParser.parse_game_details(
+        html, "https://www.metacritic.com/game/test-game/"
+    )
+    assert details.cover_url == "https://www.metacritic.com/a/img/cover3.jpg"
+
+
+def test_cover_extraction_json_ld_graph() -> None:
+    """Verify cover extraction from JSON-LD @graph structure."""
+    html = """
+    <html><head>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {"@type": "Organization", "name": "Metacritic"},
+        {"@type": "VideoGame", "name": "Graph Game", "image": "https://www.metacritic.com/a/img/graph_cover.jpg"}
+      ]
+    }
+    </script>
+    </head><body></body></html>
+    """
+    details = MetacriticParser.parse_game_details(
+        html, "https://www.metacritic.com/game/graph-game/"
+    )
+    assert details.cover_url == "https://www.metacritic.com/a/img/graph_cover.jpg"
+
+
+def test_cover_extraction_opengraph_fallback() -> None:
+    """Verify fallback to OpenGraph og:image and og:image:secure_url."""
+    html = """
+    <html><head>
+    <meta property="og:title" content="OG Game" />
+    <meta property="og:image" content="https://www.metacritic.com/a/img/og_cover.jpg" />
+    </head><body></body></html>
+    """
+    details = MetacriticParser.parse_game_details(html, "https://www.metacritic.com/game/og-game/")
+    assert details.cover_url == "https://www.metacritic.com/a/img/og_cover.jpg"
+
+
+def test_cover_extraction_twitter_fallback() -> None:
+    """Verify fallback to twitter:image when JSON-LD and OpenGraph are absent."""
+    html = """
+    <html><head>
+    <meta name="twitter:title" content="Twitter Game" />
+    <meta name="twitter:image" content="https://www.metacritic.com/a/img/twitter_cover.jpg" />
+    </head><body></body></html>
+    """
+    details = MetacriticParser.parse_game_details(
+        html, "https://www.metacritic.com/game/twitter-game/"
+    )
+    assert details.cover_url == "https://www.metacritic.com/a/img/twitter_cover.jpg"
+
+
+def test_cover_extraction_dom_hero_lazy() -> None:
+    """Verify DOM hero image extraction with data-src and srcset."""
+    html = """
+    <html><body>
+    <div class="c-productHero_image">
+      <img data-src="https://www.metacritic.com/a/img/hero_lazy.jpg" alt="Hero Game" />
+    </div>
+    </body></html>
+    """
+    details = MetacriticParser.parse_game_details(
+        html, "https://www.metacritic.com/game/hero-game/"
+    )
+    assert details.cover_url == "https://www.metacritic.com/a/img/hero_lazy.jpg"
+
+
+def test_cover_extraction_relative_and_protocol_relative() -> None:
+    """Verify relative and protocol-relative cover URL normalization."""
+    html_rel = """
+    <html><head>
+    <meta property="og:image" content="/a/img/resize/relative_cover.jpg" />
+    </head><body></body></html>
+    """
+    details_rel = MetacriticParser.parse_game_details(
+        html_rel, "https://www.metacritic.com/game/rel-game/"
+    )
+    assert details_rel.cover_url == "https://www.metacritic.com/a/img/resize/relative_cover.jpg"
+
+    html_proto = """
+    <html><head>
+    <meta property="og:image" content="//images.metacritic.com/proto_cover.jpg" />
+    </head><body></body></html>
+    """
+    details_proto = MetacriticParser.parse_game_details(
+        html_proto, "https://www.metacritic.com/game/proto-game/"
+    )
+    assert details_proto.cover_url == "https://images.metacritic.com/proto_cover.jpg"
+
+
+def test_cover_extraction_rejects_placeholders() -> None:
+    """Verify placeholder and spacer images are rejected in favor of None."""
+    html = """
+    <html><head>
+    <meta property="og:image" content="https://www.metacritic.com/images/default-boxart.jpg" />
+    <meta name="twitter:image" content="https://www.metacritic.com/images/spacer.gif" />
+    </head><body>
+    <div class="c-productHero_image">
+      <img src="https://www.metacritic.com/images/placeholder_game.png" />
+    </div>
+    </body></html>
+    """
+    details = MetacriticParser.parse_game_details(
+        html, "https://www.metacritic.com/game/placeholder-game/"
+    )
+    assert details.cover_url is None
+
+
+def test_cover_extraction_empty_or_corrupted_html() -> None:
+    """Verify empty or corrupted HTML gracefully returns None cover_url."""
+    assert (
+        MetacriticParser.parse_game_details("", "https://www.metacritic.com/game/empty/").cover_url
+        is None
+    )
+    assert (
+        MetacriticParser.parse_game_details(
+            "<div><span>garbage</span></div>", "https://www.metacritic.com/game/bad/"
+        ).cover_url
+        is None
+    )

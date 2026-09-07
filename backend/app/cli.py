@@ -239,6 +239,90 @@ async def run_youtube_command(
     print("=====================================")
 
 
+async def run_backfill_covers_command(
+    dry_run: bool = True,
+    delay: float = 0.5,
+    limit: int | None = None,
+) -> None:
+    import httpx
+    from sqlalchemy import select
+
+    from app.models.game import Game
+    from app.services.crawler.client import DEFAULT_HEADERS
+    from app.services.crawler.parser import MetacriticParser
+
+    print("=== BACKFILL GAME COVERS ===")
+    print(
+        f"Mode:         {'DRY RUN (no database changes)' if dry_run else 'LIVE PERSISTENCE (updating games.cover_url)'}"
+    )
+    print(f"Polite Delay: {delay}s")
+    print(f"Limit:        {limit or 'None (all missing)'}")
+    print("----------------------------------------------------------------------")
+
+    async with AsyncSessionLocal() as session:
+        stmt = (
+            select(Game)
+            .where((Game.cover_url.is_(None)) | (Game.cover_url == ""))
+            .order_by(Game.id.asc())
+        )
+        if limit:
+            stmt = stmt.limit(limit)
+        res = await session.execute(stmt)
+        games_to_check = list(res.scalars().all())
+
+        total_scanned = len(games_to_check)
+        print(f"Found {total_scanned} games with missing/empty cover_url in database.\n")
+
+        found_count = 0
+        updated_count = 0
+        failed_requests = 0
+
+        async with httpx.AsyncClient(
+            headers=DEFAULT_HEADERS,
+            timeout=15.0,
+            follow_redirects=True,
+        ) as client:
+            for idx, game in enumerate(games_to_check, 1):
+                url = game.metacritic_url
+                print(f"[{idx}/{total_scanned}] Game #{game.id}: '{game.title}'")
+                try:
+                    resp = await client.get(url)
+                    if resp.status_code == 200:
+                        details = MetacriticParser.parse_game_details(resp.text, url)
+                        new_cover = details.cover_url
+                        if new_cover:
+                            found_count += 1
+                            print(f"  -> Found cover: {new_cover}")
+                            if not dry_run:
+                                game.cover_url = new_cover
+                                updated_count += 1
+                        else:
+                            print("  -> No cover available on Metacritic")
+                    else:
+                        print(f"  -> HTTP {resp.status_code} fetching page")
+                        failed_requests += 1
+                except Exception as e:
+                    print(f"  -> Error: {e}")
+                    failed_requests += 1
+
+                if delay > 0 and idx < total_scanned:
+                    await asyncio.sleep(delay)
+
+        if not dry_run and updated_count > 0:
+            await session.commit()
+            print(f"\n[SUCCESS] Committed {updated_count} cover updates to database.")
+
+        remaining = total_scanned - (updated_count if not dry_run else found_count)
+        print("----------------------------------------------------------------------")
+        print("SUMMARY:")
+        print(f"  Total games scanned:           {total_scanned}")
+        print(f"  Covers found on Metacritic:    {found_count}")
+        print(f"  Covers updated in DB:          {updated_count}")
+        print(f"  Failed HTTP requests:          {failed_requests}")
+        print(f"  Games remaining without cover: {remaining}")
+        print("======================================================================")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Metacritic AI Platform CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -349,6 +433,34 @@ def main() -> None:
         help="Force search and regeneration even if fresh or unchanged",
     )
 
+    backfill_parser = subparsers.add_parser(
+        "backfill-covers", help="Backfill missing/broken game covers without modifying other fields"
+    )
+    backfill_parser.add_argument(
+        "--apply",
+        action="store_true",
+        dest="apply",
+        help="Apply database updates (defaults to dry-run if omitted)",
+    )
+    backfill_parser.add_argument(
+        "--dry-run",
+        action="store_false",
+        dest="apply",
+        help="Run without committing updates to database (default)",
+    )
+    backfill_parser.add_argument(
+        "--delay",
+        type=float,
+        default=0.5,
+        help="Polite delay between HTTP requests in seconds (default: 0.5)",
+    )
+    backfill_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Maximum games to check (default: all missing)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "crawl":
@@ -376,6 +488,14 @@ def main() -> None:
                 missing=args.missing,
                 all_games=args.all_games,
                 force=args.force,
+            )
+        )
+    elif args.command == "backfill-covers":
+        asyncio.run(
+            run_backfill_covers_command(
+                dry_run=not args.apply,
+                delay=args.delay,
+                limit=args.limit,
             )
         )
     else:

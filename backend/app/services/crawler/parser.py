@@ -184,6 +184,176 @@ def _platform_slug_to_name(slug: str) -> str:
     return normalize_platform_name(slug, slug=slug)
 
 
+PLACEHOLDER_COVER_PATTERNS = re.compile(
+    r"(?:placeholder|default[-_]boxart|default[-_]cover|no[-_]image|no[-_]cover|1x1|spacer\.gif|blank\.gif|clear\.gif)",
+    re.IGNORECASE,
+)
+
+
+def _normalize_cover_url(
+    url: str | None, base_url: str = "https://www.metacritic.com"
+) -> str | None:
+    """Normalize cover URL, resolve relative paths, validate scheme, and filter placeholders."""
+    if not url:
+        return None
+    val = url.strip()
+    if not val or val.startswith("data:"):
+        return None
+
+    if val.startswith("//"):
+        val = f"https:{val}"
+    elif val.startswith("/"):
+        val = f"{base_url.rstrip('/')}{val}"
+    elif not val.startswith("http://") and not val.startswith("https://"):
+        val = f"{base_url.rstrip('/')}/{val}"
+
+    # Verify scheme
+    if not (val.startswith("http://") or val.startswith("https://")):
+        return None
+
+    # Filter placeholder URLs
+    if PLACEHOLDER_COVER_PATTERNS.search(val):
+        return None
+
+    return val
+
+
+def _extract_json_ld_video_game(soup: BeautifulSoup) -> dict[str, Any]:
+    """Find VideoGame entity in JSON-LD scripts (direct, @graph, or list)."""
+    for script in soup.find_all("script", type="application/ld+json"):
+        raw = script.string or script.get_text() or ""
+        if not raw.strip():
+            continue
+        try:
+            data = json.loads(raw)
+        except Exception:
+            continue
+
+        entities: list[dict[str, Any]] = []
+        if isinstance(data, dict):
+            if "@graph" in data and isinstance(data["@graph"], list):
+                entities.extend([x for x in data["@graph"] if isinstance(x, dict)])
+            else:
+                entities.append(data)
+        elif isinstance(data, list):
+            entities.extend([x for x in data if isinstance(x, dict)])
+
+        # Prioritize @type == "VideoGame"
+        for ent in entities:
+            ent_type = ent.get("@type")
+            if ent_type == "VideoGame" or (isinstance(ent_type, list) and "VideoGame" in ent_type):
+                return ent
+
+        # Fallback to SoftwareApplication / Product
+        for ent in entities:
+            ent_type = ent.get("@type")
+            types = ent_type if isinstance(ent_type, list) else [ent_type]
+            if any(t in ("SoftwareApplication", "Product") for t in types):
+                return ent
+
+    return {}
+
+
+def _extract_cover_url(
+    soup: BeautifulSoup,
+    ld_data: dict[str, Any],
+    base_url: str = "https://www.metacritic.com",
+) -> str | None:
+    """
+    Extract game cover URL using a multi-tiered priority cascade:
+    1. JSON-LD string: ld_data.get("image")
+    2. JSON-LD list or dict with "url"
+    3. OpenGraph: og:image, og:image:secure_url
+    4. Twitter Card: twitter:image, twitter:image:src
+    5. Hero/lazy images from DOM:
+       - img[data-testid="hero-image"]
+       - hero container picture / img
+       - checking data-src, srcset, src
+    """
+    # 1 & 2: JSON-LD image field (string, dict, or list)
+    ld_img = ld_data.get("image")
+    if isinstance(ld_img, str):
+        cand = _normalize_cover_url(ld_img, base_url)
+        if cand:
+            return cand
+    elif isinstance(ld_img, dict):
+        cand = _normalize_cover_url(ld_img.get("url"), base_url)
+        if cand:
+            return cand
+    elif isinstance(ld_img, list):
+        for item in ld_img:
+            if isinstance(item, str):
+                cand = _normalize_cover_url(item, base_url)
+                if cand:
+                    return cand
+            elif isinstance(item, dict):
+                cand = _normalize_cover_url(item.get("url"), base_url)
+                if cand:
+                    return cand
+
+    # 3: OpenGraph meta tags
+    for prop in ("og:image", "og:image:secure_url"):
+        val = _get_meta_content(soup, property=prop)
+        cand = _normalize_cover_url(val, base_url)
+        if cand:
+            return cand
+
+    # 4: Twitter Card meta tags
+    for name in ("twitter:image", "twitter:image:src"):
+        val = _get_meta_content(soup, name=name) or _get_meta_content(soup, property=name)
+        cand = _normalize_cover_url(val, base_url)
+        if cand:
+            return cand
+
+    # 5: Hero / DOM images
+    # Check data-testid="hero-image"
+    hero_img = _find_by_testid(soup, "hero-image")
+    if hero_img:
+        for attr in ("data-src", "src"):
+            val = _get_attr(hero_img, attr)
+            cand = _normalize_cover_url(val, base_url)
+            if cand:
+                return cand
+        srcset = _get_attr(hero_img, "srcset")
+        if srcset:
+            first_src = srcset.split(",")[0].strip().split()[0]
+            cand = _normalize_cover_url(first_src, base_url)
+            if cand:
+                return cand
+
+    # Hero containers
+    hero_containers = []
+    hero_container_elem = _find_by_testid(soup, "hero-image-container")
+    if hero_container_elem:
+        hero_containers.append(hero_container_elem)
+    for class_pat in (
+        r"c-productHero_image",
+        r"c-gameDetails_hero",
+        r"hero-image",
+        r"c-heroMedia",
+    ):
+        for elem in soup.find_all(class_=re.compile(class_pat, re.I)):
+            if elem not in hero_containers:
+                hero_containers.append(elem)
+
+    for container in hero_containers:
+        img_elem = container.find("img")
+        if img_elem:
+            for attr in ("data-src", "src"):
+                val = _get_attr(img_elem, attr)
+                cand = _normalize_cover_url(val, base_url)
+                if cand:
+                    return cand
+            srcset = _get_attr(img_elem, "srcset")
+            if srcset:
+                first_src = srcset.split(",")[0].strip().split()[0]
+                cand = _normalize_cover_url(first_src, base_url)
+                if cand:
+                    return cand
+
+    return None
+
+
 class MetacriticParser:
     """
     Pure parser functions for extracting domain DTOs from raw HTML.
@@ -338,15 +508,7 @@ class MetacriticParser:
         normalized_url = normalize_canonical_url(canonical_url)
 
         # 1. Parse JSON-LD Schema.org metadata if present
-        ld_data: dict = {}
-        for script in soup.find_all("script", type="application/ld+json"):
-            try:
-                data = json.loads(script.string or "")
-                if isinstance(data, dict) and data.get("@type") == "VideoGame":
-                    ld_data = data
-                    break
-            except Exception:
-                continue
+        ld_data: dict = _extract_json_ld_video_game(soup)
 
         # 2. Title
         hero_title_elem = _find_by_testid(soup, "hero-title")
@@ -377,9 +539,7 @@ class MetacriticParser:
         )
 
         # 5. Cover URL
-        cover_url = _clean_text(ld_data.get("image")) or _clean_text(
-            _get_meta_content(soup, property="og:image")
-        )
+        cover_url = _extract_cover_url(soup, ld_data)
 
         # 6. Trailer URL
         trailer_url = None

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Game } from '../types';
 import { ScoreBadge } from './ScoreBadge';
@@ -9,6 +9,7 @@ interface GameCardProps {
 
 export const GameCard: React.FC<GameCardProps> = ({ game }) => {
   const navigate = useNavigate();
+  const [imageError, setImageError] = useState(false);
 
   // Extract best metascore & userscore
   const metascores = game.game_platforms
@@ -25,19 +26,36 @@ export const GameCard: React.FC<GameCardProps> = ({ game }) => {
     .map((gp) => gp.platform.name)
     .join(', ');
 
+  const hasValidCover = Boolean(game.cover_url) && !imageError;
+
   return (
     <div className="game-card" onClick={() => navigate(`/games/${game.id}`)}>
-      {game.cover_url ? (
+      {hasValidCover ? (
         <img
-          src={game.cover_url}
+          src={game.cover_url!}
           alt={game.title}
           className="game-cover"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = 'none';
-          }}
+          onError={() => setImageError(true)}
         />
       ) : (
-        <div className="game-cover">No Cover</div>
+        <div className="game-cover game-cover-placeholder">
+          <svg
+            className="game-cover-placeholder-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="2" y="6" width="20" height="12" rx="2" />
+            <path d="M6 12h4m-2-2v4" />
+            <circle cx="17" cy="10" r="0.5" fill="currentColor" />
+            <circle cx="15" cy="13" r="0.5" fill="currentColor" />
+          </svg>
+          <span className="game-cover-placeholder-text">No Cover</span>
+        </div>
       )}
 
       <div className="game-card-body">

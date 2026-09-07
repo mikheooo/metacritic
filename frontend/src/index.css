@@ -225,6 +225,33 @@ button, input, select {
   color: var(--text-muted);
 }
 
+.game-cover-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: linear-gradient(145deg, #131d31 0%, #0d1527 100%);
+  border-bottom: 1px solid var(--border-color);
+  user-select: none;
+}
+
+.game-cover-placeholder-icon {
+  width: 36px;
+  height: 36px;
+  color: var(--text-muted);
+  opacity: 0.55;
+}
+
+.game-cover-placeholder-text {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
 .game-card-body {
   padding: 1.25rem;
   display: flex;
@@ -376,6 +403,33 @@ button, input, select {
   object-fit: cover;
   background-color: #0b1120;
   flex-shrink: 0;
+}
+
+.detail-cover-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  background: linear-gradient(145deg, #131d31 0%, #0b1120 100%);
+  border: 1px solid var(--border-color);
+  user-select: none;
+}
+
+.detail-cover-placeholder-icon {
+  width: 48px;
+  height: 48px;
+  color: var(--text-muted);
+  opacity: 0.55;
+}
+
+.detail-cover-placeholder-text {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  opacity: 0.8;
 }
 
 .detail-info {
