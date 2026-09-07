@@ -251,13 +251,20 @@ class ReviewEnrichmentService:
         )
 
         # 4. Compute input fingerprint
+        provider_name = getattr(self.summarizer, "provider", settings.LLM_PROVIDER)
         model_name = getattr(self.summarizer, "model", settings.LLM_MODEL)
         prompt_version = getattr(self.summarizer, "prompt_version", settings.SUMMARY_PROMPT_VERSION)
+        language = getattr(self.summarizer, "language", settings.SUMMARY_LANGUAGE)
+
         fingerprint = compute_input_fingerprint(
             reviews=sample,
             prompt_version=prompt_version,
             model=model_name,
+            provider=provider_name,
+            review_type=review_type,
+            language=language,
         )
+
 
         # 5. Check if summary already exists with same fingerprint
         stmt_sum = select(GameReviewSummary).where(
@@ -337,9 +344,11 @@ class ReviewEnrichmentService:
             existing_summary.prompt_version = summary_result.prompt_version
             existing_summary.input_tokens = summary_result.input_tokens
             existing_summary.output_tokens = summary_result.output_tokens
+            existing_summary.generated_at = now
             existing_summary.updated_at = now
             await self.db.flush()
             summary_id = existing_summary.id
+
 
         # 8. Update game cache field
         if review_type == "critic":

@@ -314,3 +314,164 @@ async def test_game_detail_api_exposes_summaries(client: AsyncClient, db_session
     assert user_detail["review_type"] == "user"
     assert len(user_detail["likes"]) == 3
     assert len(user_detail["dislikes"]) == 3
+
+
+def test_provider_missing_openai_key_raises_explicit_error(monkeypatch):
+    """
+    Test Requirement 1 & 10:
+    LLM_PROVIDER=openai with missing/empty OPENAI_API_KEY must raise an explicit ValueError.
+    It must NEVER silently fall back to FakeReviewSummarizer.
+    """
+    from app.core.config import settings
+    from app.services.ai.summarizer import FakeReviewSummarizer, get_summarizer
+
+    monkeypatch.setattr(settings, "LLM_PROVIDER", "openai")
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", None)
+
+    fake_inst = FakeReviewSummarizer()
+    assert fake_inst.call_count == 0
+
+    with pytest.raises(ValueError, match="OPENAI_API_KEY is missing or empty"):
+        get_summarizer()
+
+    # Empty string key should also raise ValueError
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", "   ")
+    with pytest.raises(ValueError, match="OPENAI_API_KEY is missing or empty"):
+        get_summarizer()
+
+    assert fake_inst.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_provider_switch_forces_regeneration(db_session: AsyncSession):
+    """
+    Test Requirement 11:
+    Existing summary with provider=fake on same reviews, when run with provider=openai,
+    must change fingerprint, invoke OpenAI summarizer, replace summary in DB,
+    and subsequent run must return skipped_unchanged.
+    """
+    from app.services.ai.summarizer import ReviewSummaryResult
+
+    game = await _create_test_game(db_session, slug="switch-test", title="Switch Test Game")
+
+    source = MockReviewSource(
+        critic_reviews=_sample_critic_reviews(),
+        user_reviews=_sample_user_reviews(),
+    )
+
+    # 1. First run with fake summarizer
+    fake_summarizer = FakeReviewSummarizer(provider="fake", model="fake-gpt-4o-mini")
+    service_fake = ReviewEnrichmentService(db=db_session, source=source, summarizer=fake_summarizer)
+    res_fake = await service_fake.enrich_and_summarize(game.id)
+    assert res_fake.critic_summary_status == "generated"
+    assert fake_summarizer.call_count == 2
+
+    # Verify DB has provider=fake
+    stmt_sum = select(GameReviewSummary).where(
+        GameReviewSummary.game_id == game.id,
+        GameReviewSummary.review_type == "critic",
+    )
+    sum_fake = (await db_session.execute(stmt_sum)).scalar_one()
+    assert sum_fake.provider == "fake"
+    old_fingerprint = sum_fake.input_fingerprint
+
+    # 2. Switch to simulated OpenAI summarizer
+    class MockOpenAISummarizer:
+        def __init__(self):
+            self.provider = "openai"
+            self.model = "gpt-4o-mini"
+            self.prompt_version = "v1"
+            self.language = "ru"
+            self.call_count = 0
+
+        async def summarize(self, game_title, review_type, reviews, fingerprint):
+            self.call_count += 1
+            return ReviewSummaryResult(
+                summary="Real OpenAI summary for " + game_title,
+                likes=["OpenAI Like 1", "OpenAI Like 2", "OpenAI Like 3"],
+                dislikes=["OpenAI Dislike 1", "OpenAI Dislike 2", "OpenAI Dislike 3"],
+                review_count_used=len(reviews),
+                input_fingerprint=fingerprint,
+                provider="openai",
+                model=self.model,
+                prompt_version=self.prompt_version,
+                input_tokens=500,
+                output_tokens=100,
+            )
+
+    openai_summarizer = MockOpenAISummarizer()
+    service_openai = ReviewEnrichmentService(db=db_session, source=source, summarizer=openai_summarizer)
+
+    # Summarize with new provider on same reviews
+    res_switch = await service_openai.summarize_game_reviews(game, "critic")
+    assert res_switch.status == "generated"
+    assert openai_summarizer.call_count == 1
+
+    # Verify DB updated to provider=openai and new fingerprint
+    await db_session.refresh(sum_fake)
+    assert sum_fake.provider == "openai"
+    assert sum_fake.model == "gpt-4o-mini"
+    assert sum_fake.input_fingerprint != old_fingerprint
+    assert "Real OpenAI summary" in sum_fake.summary
+
+    # 3. Subsequent identical run must be skipped_unchanged
+    res_subsequent = await service_openai.summarize_game_reviews(game, "critic")
+    assert res_subsequent.status == "skipped_unchanged"
+    assert openai_summarizer.call_count == 1  # No additional LLM call
+
+
+@pytest.mark.asyncio
+async def test_llm_failure_persistence_invariant(db_session: AsyncSession):
+    """
+    Test Requirement 12:
+    When reviews are persisted and LLM request fails:
+    - reviews remain persisted
+    - game remains persisted
+    - summary status is error and no fake summary is silently generated
+    """
+    game = await _create_test_game(db_session, slug="fail-test", title="Failure Test Game")
+
+    source = MockReviewSource(
+        critic_reviews=_sample_critic_reviews(),
+        user_reviews=_sample_user_reviews(),
+    )
+
+    class FailingSummarizer:
+        def __init__(self):
+            self.provider = "openai"
+            self.model = "gpt-4o-mini"
+            self.prompt_version = "v1"
+            self.language = "ru"
+
+        async def summarize(self, game_title, review_type, reviews, fingerprint):
+            raise RuntimeError("OpenAI API rate limit exceeded")
+
+    service = ReviewEnrichmentService(db=db_session, source=source, summarizer=FailingSummarizer())
+    res = await service.enrich_and_summarize(game.id)
+
+    assert res.critic_reviews_ingested == 3
+    assert res.user_reviews_ingested == 3
+    assert res.critic_summary_status == "error"
+    assert res.user_summary_status == "error"
+
+    # Invariant: Reviews and Game MUST remain in DB
+    db_game = await db_session.get(Game, game.id)
+    assert db_game is not None
+
+    count_critic = await db_session.scalar(
+        select(func.count(Review.id)).where(Review.game_id == game.id, Review.review_type == "critic")
+    )
+    count_user = await db_session.scalar(
+        select(func.count(Review.id)).where(Review.game_id == game.id, Review.review_type == "user")
+    )
+    assert count_critic == 3
+    assert count_user == 3
+
+    # Invariant: No summaries created in DB
+    summaries = (
+        await db_session.execute(
+            select(GameReviewSummary).where(GameReviewSummary.game_id == game.id)
+        )
+    ).scalars().all()
+    assert len(summaries) == 0
+

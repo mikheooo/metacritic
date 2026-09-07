@@ -47,6 +47,7 @@ services:
       - ENVIRONMENT=development
       - DEBUG=true
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
       - LLM_PROVIDER=${LLM_PROVIDER:-openai}
       - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
     depends_on:
@@ -75,8 +76,10 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - ENVIRONMENT=development
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
       - LLM_PROVIDER=${LLM_PROVIDER:-openai}
       - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
+
     depends_on:
       postgres:
         condition: service_healthy

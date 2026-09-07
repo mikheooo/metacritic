@@ -72,13 +72,15 @@ class Settings(BaseSettings):
 
     # AI & LLM Summarization Settings
     OPENAI_API_KEY: str | None = None
+    OPENAI_BASE_URL: str | None = None
     LLM_PROVIDER: str = "openai"
     LLM_MODEL: str = "gpt-4o-mini"
-    SUMMARY_LANGUAGE: str = "en"
+    SUMMARY_LANGUAGE: str = "ru"
     SUMMARY_PROMPT_VERSION: str = "v1"
 
     # Future External Integration Keys
     YOUTUBE_API_KEY: str | None = None
+
 
 
 settings = Settings()

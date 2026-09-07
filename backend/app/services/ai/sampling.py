@@ -162,17 +162,24 @@ def compute_input_fingerprint(
     reviews: Sequence[ReviewForSummary],
     prompt_version: str,
     model: str,
+    provider: str = "openai",
+    review_type: str = "critic",
+    language: str = "ru",
 ) -> str:
     """
-    Compute a deterministic SHA-256 hash of the reviews, prompt version, and model.
-    Used to skip expensive LLM calls if the selected review corpus is unchanged.
+    Compute a deterministic SHA-256 hash of the reviews, prompt version, model,
+    provider, review_type, and summary language.
+    Used to skip expensive LLM calls if the selected review corpus and configuration are unchanged.
     """
-    # Sort reviews deterministically by external_id
-    sorted_reviews = sorted(reviews, key=lambda r: r.external_id)
+    # Sort reviews deterministically by external_id and content_hash
+    sorted_reviews = sorted(reviews, key=lambda r: (r.external_id, r.content_hash))
 
     payload = {
-        "prompt_version": prompt_version,
+        "review_type": review_type.lower(),
+        "provider": provider.lower(),
         "model": model,
+        "prompt_version": prompt_version,
+        "language": language.lower(),
         "reviews": [
             {
                 "external_id": r.external_id,
@@ -188,3 +195,4 @@ def compute_input_fingerprint(
 
     serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+

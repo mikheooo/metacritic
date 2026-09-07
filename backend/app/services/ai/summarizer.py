@@ -34,6 +34,11 @@ class ReviewSummaryResult(BaseModel):
 class ReviewSummarizer(Protocol):
     """Protocol for AI review summarizers."""
 
+    provider: str
+    model: str
+    prompt_version: str
+    language: str
+
     async def summarize(
         self,
         game_title: str,
@@ -93,17 +98,29 @@ class OpenAIReviewSummarizer:
     def __init__(
         self,
         api_key: str | None = None,
+        base_url: str | None = None,
         model: str | None = None,
         prompt_version: str | None = None,
         language: str | None = None,
         timeout: float = 45.0,
     ):
+        self.provider = "openai"
         self.api_key = api_key or settings.OPENAI_API_KEY
+        if not self.api_key or not self.api_key.strip():
+            raise ValueError(
+                "OPENAI_API_KEY must be provided and non-empty for OpenAIReviewSummarizer."
+            )
+        self.base_url = base_url or settings.OPENAI_BASE_URL
         self.model = model or settings.LLM_MODEL
         self.prompt_version = prompt_version or settings.SUMMARY_PROMPT_VERSION
         self.language = language or settings.SUMMARY_LANGUAGE
         self.timeout = timeout
-        self.client = AsyncOpenAI(api_key=self.api_key, timeout=self.timeout)
+        self.client = AsyncOpenAI(
+            api_key=self.api_key,
+            base_url=self.base_url,
+            timeout=self.timeout,
+        )
+
 
     async def summarize(
         self,
@@ -184,10 +201,14 @@ class FakeReviewSummarizer:
         self,
         model: str = "fake-gpt-4o-mini",
         prompt_version: str = "v1",
+        language: str = "ru",
+        provider: str = "fake",
         custom_response: ReviewSummaryResult | None = None,
     ):
+        self.provider = provider
         self.model = model
         self.prompt_version = prompt_version
+        self.language = language
         self.custom_response = custom_response
         self.call_count = 0
         self.last_game_title: str | None = None
@@ -247,7 +268,7 @@ class FakeReviewSummarizer:
             dislikes=dislikes,
             review_count_used=len(reviews),
             input_fingerprint=fingerprint,
-            provider="fake",
+            provider=self.provider,
             model=self.model,
             prompt_version=self.prompt_version,
             input_tokens=150,
@@ -256,15 +277,27 @@ class FakeReviewSummarizer:
 
 
 def get_summarizer() -> ReviewSummarizer:
-    """Factory to retrieve configured review summarizer."""
-    provider = (settings.LLM_PROVIDER or "openai").lower()
-    if provider == "openai" and settings.OPENAI_API_KEY:
+    """Factory to retrieve configured review summarizer.
+
+    Strict provider semantics:
+    - LLM_PROVIDER=openai: returns OpenAIReviewSummarizer.
+      Requires non-empty OPENAI_API_KEY; missing/invalid key raises explicit ValueError.
+      NO silent fallback to FakeReviewSummarizer is permitted.
+    - LLM_PROVIDER=fake: returns FakeReviewSummarizer for tests and deterministic local mode.
+    - Unsupported provider raises ValueError.
+    """
+    provider = (settings.LLM_PROVIDER or "openai").strip().lower()
+    if provider == "openai":
+        if not settings.OPENAI_API_KEY or not settings.OPENAI_API_KEY.strip():
+            raise ValueError(
+                "LLM_PROVIDER is configured as 'openai', but OPENAI_API_KEY is missing or empty. "
+                "Configure OPENAI_API_KEY in environment or set LLM_PROVIDER='fake' for testing."
+            )
         return OpenAIReviewSummarizer()
     elif provider == "fake":
         return FakeReviewSummarizer()
     else:
-        logger.warning(
-            "LLM_PROVIDER is '%s' but OPENAI_API_KEY is not set. Falling back to FakeReviewSummarizer.",
-            settings.LLM_PROVIDER,
+        raise ValueError(
+            f"Unsupported LLM_PROVIDER '{settings.LLM_PROVIDER}'. Supported providers: 'openai', 'fake'."
         )
-        return FakeReviewSummarizer()
+

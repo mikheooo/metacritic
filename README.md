@@ -313,8 +313,23 @@ sum_task = summarize_game_reviews.delay(game_id=11, review_type="both")
 
 ---
 
-## Current Status: Stage 3 COMPLETE
+## Current Status: Stage 3.1 COMPLETE (Production LLM Verified)
 
+### AI Summarizer Providers & Semantics
+
+- **`OpenAIReviewSummarizer` (Production Mode)**:
+  - Backed by OpenAI structured outputs (`client.beta.chat.completions.parse`) with strict Pydantic model (`LLMSummaryResponse`: 2–4 sentence synthesis, exactly 3 likes, exactly 3 dislikes).
+  - Configured via `LLM_PROVIDER=openai`, `OPENAI_API_KEY`, optional `OPENAI_BASE_URL` (supports standard OpenAI API and OpenAI-compatible proxies), and `LLM_MODEL` (e.g. `openai/gpt-4o-mini`).
+  - **Critical Invariant**: If `LLM_PROVIDER=openai` and `OPENAI_API_KEY` is missing or empty, the system raises an explicit controlled configuration error (`ValueError`). **No automatic production fallback to `FakeReviewSummarizer` is permitted.**
+- **`FakeReviewSummarizer` (Testing & Deterministic Local Mode)**:
+  - Used strictly for unit tests, regression tests, and explicit local dry-run testing (`LLM_PROVIDER=fake`).
+  - Fast, fully deterministic, zero-network summarization.
+- **Fingerprinting & Cost Control**:
+  - `compute_input_fingerprint` uniquely binds review IDs, content hashes, `provider`, `model`, `prompt_version`, `review_type`, and `language`.
+  - Switching provider (e.g. `fake` → `openai`) or model naturally alters the fingerprint, triggering real LLM regeneration.
+  - Subsequent unchanged runs detect the identical fingerprint and strictly bypass the LLM (`skipped_unchanged`), incurring zero token cost.
+
+### Checklist
 - [x] Full-stack directory structure & container orchestration
 - [x] SQLAlchemy 2.0 models with strict constraints (`DailyGameProcessing`, `DailyCrawlState`, `CrawlRun`, `Review`, `GameReviewSummary`)
 - [x] Pure decoupled parser (`MetacriticParser`) with critic/user review extraction and HTML test fixtures
@@ -324,12 +339,13 @@ sum_task = summarize_game_reviews.delay(game_id=11, review_type="both")
 - [x] Cursor vs ledger progression (`DailyCrawlState` pointer vs `DailyGameProcessing` truth)
 - [x] Per-game failure isolation with transaction savepoints
 - [x] Deterministic review sampling (`select_reviews_for_summary`) with sentiment quota and platform interleaving
-- [x] Canonical SHA-256 fingerprinting (`compute_input_fingerprint`) skipping unchanged LLM calls for cost control
-- [x] `ReviewSummarizer` Protocol with structured `OpenAIReviewSummarizer` and deterministic `FakeReviewSummarizer`
-- [x] System prompt injection defenses with untrusted delimiters
+- [x] Canonical SHA-256 fingerprinting (`compute_input_fingerprint`) factoring in review corpus, provider, model, and prompt version
+- [x] Production `OpenAIReviewSummarizer` with structured outputs and explicit error on missing key (no silent fake fallback)
+- [x] System prompt injection defenses with untrusted `<REVIEWS>` delimiters
 - [x] Developer CLI (`python -m app.cli crawl`, `python -m app.cli enrich`) and Celery tasks (`tasks.enrich_game_reviews`, `tasks.summarize_game_reviews`)
-- [x] Frontend UI on `/games/:id` rendering "Critics say" and "Players say" cards with 3 likes, 3 dislikes, review counts, and review tabs
-- [x] 57 automated tests covering parser, models, API, daily crawler state transitions, sampling, fingerprinting, and review enrichment
-- [x] Controlled live validation verifying real Metacritic ingestion, summary generation, second-run skipping, and zero duplicate SQL violations
+- [x] Frontend UI on `/games/:id` rendering "Critics say" and "Players say" cards with 3 likes, 3 dislikes, review counts, provider/model badges, and review tabs
+- [x] 60 automated tests covering parser, models, API, daily crawler state transitions, sampling, fingerprinting, provider failure, provider switch, and review enrichment
+- [x] Controlled live validation verifying real OpenAI model calls, generated statuses, second-run LLM skipping, zero SQL duplicates, and verified REST API response
 - [x] Clean Ruff and mypy validation (0 errors across 47 source files)
+
 

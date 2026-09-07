@@ -134,7 +134,35 @@ def test_compute_input_fingerprint_sensitive():
     fp_model = compute_input_fingerprint([r1, r2], prompt_version="v1", model="gpt-4o")
     assert fp_base != fp_model
 
+    # Change provider (fake vs openai must produce distinct fingerprints)
+    fp_fake = compute_input_fingerprint(
+        [r1, r2], prompt_version="v1", model="gpt-4o-mini", provider="fake"
+    )
+    fp_openai = compute_input_fingerprint(
+        [r1, r2], prompt_version="v1", model="gpt-4o-mini", provider="openai"
+    )
+    assert fp_fake != fp_openai
+
+    # Change review type
+    fp_critic = compute_input_fingerprint(
+        [r1, r2], prompt_version="v1", model="gpt-4o-mini", review_type="critic"
+    )
+    fp_user = compute_input_fingerprint(
+        [r1, r2], prompt_version="v1", model="gpt-4o-mini", review_type="user"
+    )
+    assert fp_critic != fp_user
+
+    # Change language
+    fp_ru = compute_input_fingerprint(
+        [r1, r2], prompt_version="v1", model="gpt-4o-mini", language="ru"
+    )
+    fp_en = compute_input_fingerprint(
+        [r1, r2], prompt_version="v1", model="gpt-4o-mini", language="en"
+    )
+    assert fp_ru != fp_en
+
     # Change review score
     r2_changed = _make_review(2, score=55.0)
     fp_score = compute_input_fingerprint([r1, r2_changed], prompt_version="v1", model="gpt-4o-mini")
     assert fp_base != fp_score
+
