@@ -134,14 +134,20 @@ def test_compute_input_fingerprint_sensitive():
     fp_model = compute_input_fingerprint([r1, r2], prompt_version="v1", model="gpt-4o")
     assert fp_base != fp_model
 
-    # Change provider (fake vs openai must produce distinct fingerprints)
+    # Change provider (fake vs openai vs openrouter must produce distinct fingerprints)
     fp_fake = compute_input_fingerprint(
         [r1, r2], prompt_version="v1", model="gpt-4o-mini", provider="fake"
     )
     fp_openai = compute_input_fingerprint(
         [r1, r2], prompt_version="v1", model="gpt-4o-mini", provider="openai"
     )
+    fp_openrouter = compute_input_fingerprint(
+        [r1, r2], prompt_version="v1", model="gpt-4o-mini", provider="openrouter"
+    )
     assert fp_fake != fp_openai
+    assert fp_openai != fp_openrouter
+    assert fp_fake != fp_openrouter
+
 
     # Change review type
     fp_critic = compute_input_fingerprint(

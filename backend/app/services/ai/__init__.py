@@ -11,7 +11,9 @@ from app.services.ai.sampling import (
 from app.services.ai.summarizer import (
     FakeReviewSummarizer,
     LLMSummaryResponse,
+    OpenAICompatibleReviewSummarizer,
     OpenAIReviewSummarizer,
+    OpenRouterReviewSummarizer,
     ReviewSummarizer,
     ReviewSummaryResult,
     get_summarizer,
@@ -23,6 +25,8 @@ __all__ = [
     "select_reviews_for_summary",
     "ReviewSummaryResult",
     "ReviewSummarizer",
+    "OpenAICompatibleReviewSummarizer",
+    "OpenRouterReviewSummarizer",
     "OpenAIReviewSummarizer",
     "FakeReviewSummarizer",
     "LLMSummaryResponse",
@@ -31,4 +35,5 @@ __all__ = [
     "EnrichmentResult",
     "SummaryExecutionResult",
 ]
+
 

@@ -71,15 +71,22 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # AI & LLM Summarization Settings
-    OPENAI_API_KEY: str | None = None
-    OPENAI_BASE_URL: str | None = None
-    LLM_PROVIDER: str = "openai"
-    LLM_MODEL: str = "gpt-4o-mini"
+    LLM_PROVIDER: str = "openrouter"
+    LLM_MODEL: str = "openai/gpt-4o-mini"
     SUMMARY_LANGUAGE: str = "ru"
     SUMMARY_PROMPT_VERSION: str = "v1"
 
+    # OpenRouter Configuration
+    OPENROUTER_API_KEY: str | None = None
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+
+    # Direct OpenAI Configuration
+    OPENAI_API_KEY: str | None = None
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+
     # Future External Integration Keys
     YOUTUBE_API_KEY: str | None = None
+
 
 
 

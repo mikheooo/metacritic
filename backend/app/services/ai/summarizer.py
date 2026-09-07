@@ -92,25 +92,26 @@ Review Source: {source_label} reviews (Total: {len(reviews)})
 Based solely on the reviews above, produce a structured summary, 3 likes, and 3 dislikes."""
 
 
-class OpenAIReviewSummarizer:
-    """Production summarizer backed by OpenAI structured outputs."""
+class OpenAICompatibleReviewSummarizer:
+    """Base summarizer for OpenAI and OpenAI-compatible structured output endpoints."""
 
     def __init__(
         self,
-        api_key: str | None = None,
+        provider: str,
+        api_key: str,
         base_url: str | None = None,
         model: str | None = None,
         prompt_version: str | None = None,
         language: str | None = None,
         timeout: float = 45.0,
     ):
-        self.provider = "openai"
-        self.api_key = api_key or settings.OPENAI_API_KEY
+        self.provider = provider
+        self.api_key = api_key
         if not self.api_key or not self.api_key.strip():
             raise ValueError(
-                "OPENAI_API_KEY must be provided and non-empty for OpenAIReviewSummarizer."
+                f"API key must be provided and non-empty for {self.__class__.__name__}."
             )
-        self.base_url = base_url or settings.OPENAI_BASE_URL
+        self.base_url = base_url
         self.model = model or settings.LLM_MODEL
         self.prompt_version = prompt_version or settings.SUMMARY_PROMPT_VERSION
         self.language = language or settings.SUMMARY_LANGUAGE
@@ -120,7 +121,6 @@ class OpenAIReviewSummarizer:
             base_url=self.base_url,
             timeout=self.timeout,
         )
-
 
     async def summarize(
         self,
@@ -160,8 +160,16 @@ class OpenAIReviewSummarizer:
                 output_tokens = usage.completion_tokens if usage else 0
 
                 # Ensure likes and dislikes each have 3 items
-                likes = parsed.likes[:3] if len(parsed.likes) >= 3 else (parsed.likes + ["Качественный игровой опыт"] * (3 - len(parsed.likes)))
-                dislikes = parsed.dislikes[:3] if len(parsed.dislikes) >= 3 else (parsed.dislikes + ["Отдельные технические шероховатости"] * (3 - len(parsed.dislikes)))
+                likes = (
+                    parsed.likes[:3]
+                    if len(parsed.likes) >= 3
+                    else (parsed.likes + ["Качественный игровой опыт"] * (3 - len(parsed.likes)))
+                )
+                dislikes = (
+                    parsed.dislikes[:3]
+                    if len(parsed.dislikes) >= 3
+                    else (parsed.dislikes + ["Отдельные технические шероховатости"] * (3 - len(parsed.dislikes)))
+                )
 
                 return ReviewSummaryResult(
                     summary=parsed.summary.strip(),
@@ -169,7 +177,7 @@ class OpenAIReviewSummarizer:
                     dislikes=dislikes,
                     review_count_used=len(reviews),
                     input_fingerprint=fingerprint,
-                    provider="openai",
+                    provider=self.provider,
                     model=self.model,
                     prompt_version=self.prompt_version,
                     input_tokens=input_tokens,
@@ -179,7 +187,8 @@ class OpenAIReviewSummarizer:
             except Exception as exc:
                 last_error = exc
                 logger.warning(
-                    "OpenAI summarize call failed (attempt %d/%d) for '%s' (%s): %s",
+                    "%s summarize call failed (attempt %d/%d) for '%s' (%s): %s",
+                    self.provider,
                     attempt,
                     max_retries,
                     game_title,
@@ -191,7 +200,64 @@ class OpenAIReviewSummarizer:
                 await asyncio.sleep(backoff)
                 backoff *= 2.0
 
-        raise RuntimeError(f"OpenAI summarization failed after {max_retries} attempts: {last_error}")
+        raise RuntimeError(f"{self.provider} summarization failed after {max_retries} attempts: {last_error}")
+
+
+class OpenRouterReviewSummarizer(OpenAICompatibleReviewSummarizer):
+    """Production summarizer backed by OpenRouter API."""
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        model: str | None = None,
+        prompt_version: str | None = None,
+        language: str | None = None,
+        timeout: float = 45.0,
+    ):
+        resolved_key = api_key or settings.OPENROUTER_API_KEY
+        if not resolved_key or not resolved_key.strip():
+            raise ValueError(
+                "OPENROUTER_API_KEY must be provided and non-empty for OpenRouterReviewSummarizer."
+            )
+        super().__init__(
+            provider="openrouter",
+            api_key=resolved_key,
+            base_url=base_url or settings.OPENROUTER_BASE_URL,
+            model=model or settings.LLM_MODEL,
+            prompt_version=prompt_version or settings.SUMMARY_PROMPT_VERSION,
+            language=language or settings.SUMMARY_LANGUAGE,
+            timeout=timeout,
+        )
+
+
+class OpenAIReviewSummarizer(OpenAICompatibleReviewSummarizer):
+    """Production summarizer backed by direct OpenAI API."""
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        model: str | None = None,
+        prompt_version: str | None = None,
+        language: str | None = None,
+        timeout: float = 45.0,
+    ):
+        resolved_key = api_key or settings.OPENAI_API_KEY
+        if not resolved_key or not resolved_key.strip():
+            raise ValueError(
+                "OPENAI_API_KEY must be provided and non-empty for OpenAIReviewSummarizer."
+            )
+        super().__init__(
+            provider="openai",
+            api_key=resolved_key,
+            base_url=base_url or settings.OPENAI_BASE_URL,
+            model=model or settings.LLM_MODEL,
+            prompt_version=prompt_version or settings.SUMMARY_PROMPT_VERSION,
+            language=language or settings.SUMMARY_LANGUAGE,
+            timeout=timeout,
+        )
+
 
 
 class FakeReviewSummarizer:
@@ -280,14 +346,24 @@ def get_summarizer() -> ReviewSummarizer:
     """Factory to retrieve configured review summarizer.
 
     Strict provider semantics:
+    - LLM_PROVIDER=openrouter: returns OpenRouterReviewSummarizer.
+      Requires non-empty OPENROUTER_API_KEY; missing/invalid key raises explicit ValueError.
+      NO silent fallback to FakeReviewSummarizer is permitted.
     - LLM_PROVIDER=openai: returns OpenAIReviewSummarizer.
       Requires non-empty OPENAI_API_KEY; missing/invalid key raises explicit ValueError.
       NO silent fallback to FakeReviewSummarizer is permitted.
     - LLM_PROVIDER=fake: returns FakeReviewSummarizer for tests and deterministic local mode.
     - Unsupported provider raises ValueError.
     """
-    provider = (settings.LLM_PROVIDER or "openai").strip().lower()
-    if provider == "openai":
+    provider = (settings.LLM_PROVIDER or "openrouter").strip().lower()
+    if provider == "openrouter":
+        if not settings.OPENROUTER_API_KEY or not settings.OPENROUTER_API_KEY.strip():
+            raise ValueError(
+                "LLM_PROVIDER is configured as 'openrouter', but OPENROUTER_API_KEY is missing or empty. "
+                "Configure OPENROUTER_API_KEY in environment or set LLM_PROVIDER='fake' for testing."
+            )
+        return OpenRouterReviewSummarizer()
+    elif provider == "openai":
         if not settings.OPENAI_API_KEY or not settings.OPENAI_API_KEY.strip():
             raise ValueError(
                 "LLM_PROVIDER is configured as 'openai', but OPENAI_API_KEY is missing or empty. "
@@ -298,6 +374,7 @@ def get_summarizer() -> ReviewSummarizer:
         return FakeReviewSummarizer()
     else:
         raise ValueError(
-            f"Unsupported LLM_PROVIDER '{settings.LLM_PROVIDER}'. Supported providers: 'openai', 'fake'."
+            f"Unsupported LLM_PROVIDER '{settings.LLM_PROVIDER}'. Supported providers: 'openrouter', 'openai', 'fake'."
         )
+
 

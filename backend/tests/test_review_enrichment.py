@@ -316,9 +316,35 @@ async def test_game_detail_api_exposes_summaries(client: AsyncClient, db_session
     assert len(user_detail["dislikes"]) == 3
 
 
+def test_provider_missing_openrouter_key_raises_explicit_error(monkeypatch):
+    """
+    Test Requirement 4:
+    LLM_PROVIDER=openrouter with missing/empty OPENROUTER_API_KEY must raise an explicit ValueError.
+    It must NEVER silently fall back to FakeReviewSummarizer.
+    """
+    from app.core.config import settings
+    from app.services.ai.summarizer import FakeReviewSummarizer, get_summarizer
+
+    monkeypatch.setattr(settings, "LLM_PROVIDER", "openrouter")
+    monkeypatch.setattr(settings, "OPENROUTER_API_KEY", None)
+
+    fake_inst = FakeReviewSummarizer()
+    assert fake_inst.call_count == 0
+
+    with pytest.raises(ValueError, match="OPENROUTER_API_KEY is missing or empty"):
+        get_summarizer()
+
+    # Empty string key should also raise ValueError
+    monkeypatch.setattr(settings, "OPENROUTER_API_KEY", "   ")
+    with pytest.raises(ValueError, match="OPENROUTER_API_KEY is missing or empty"):
+        get_summarizer()
+
+    assert fake_inst.call_count == 0
+
+
 def test_provider_missing_openai_key_raises_explicit_error(monkeypatch):
     """
-    Test Requirement 1 & 10:
+    Test Requirement 4:
     LLM_PROVIDER=openai with missing/empty OPENAI_API_KEY must raise an explicit ValueError.
     It must NEVER silently fall back to FakeReviewSummarizer.
     """
@@ -340,6 +366,7 @@ def test_provider_missing_openai_key_raises_explicit_error(monkeypatch):
         get_summarizer()
 
     assert fake_inst.call_count == 0
+
 
 
 @pytest.mark.asyncio
@@ -375,11 +402,11 @@ async def test_provider_switch_forces_regeneration(db_session: AsyncSession):
     assert sum_fake.provider == "fake"
     old_fingerprint = sum_fake.input_fingerprint
 
-    # 2. Switch to simulated OpenAI summarizer
-    class MockOpenAISummarizer:
+    # 2. Switch to simulated OpenRouter summarizer
+    class MockOpenRouterSummarizer:
         def __init__(self):
-            self.provider = "openai"
-            self.model = "gpt-4o-mini"
+            self.provider = "openrouter"
+            self.model = "openai/gpt-4o-mini"
             self.prompt_version = "v1"
             self.language = "ru"
             self.call_count = 0
@@ -387,37 +414,38 @@ async def test_provider_switch_forces_regeneration(db_session: AsyncSession):
         async def summarize(self, game_title, review_type, reviews, fingerprint):
             self.call_count += 1
             return ReviewSummaryResult(
-                summary="Real OpenAI summary for " + game_title,
-                likes=["OpenAI Like 1", "OpenAI Like 2", "OpenAI Like 3"],
-                dislikes=["OpenAI Dislike 1", "OpenAI Dislike 2", "OpenAI Dislike 3"],
+                summary="Real OpenRouter summary for " + game_title,
+                likes=["OpenRouter Like 1", "OpenRouter Like 2", "OpenRouter Like 3"],
+                dislikes=["OpenRouter Dislike 1", "OpenRouter Dislike 2", "OpenRouter Dislike 3"],
                 review_count_used=len(reviews),
                 input_fingerprint=fingerprint,
-                provider="openai",
+                provider="openrouter",
                 model=self.model,
                 prompt_version=self.prompt_version,
                 input_tokens=500,
                 output_tokens=100,
             )
 
-    openai_summarizer = MockOpenAISummarizer()
-    service_openai = ReviewEnrichmentService(db=db_session, source=source, summarizer=openai_summarizer)
+    openrouter_summarizer = MockOpenRouterSummarizer()
+    service_openrouter = ReviewEnrichmentService(db=db_session, source=source, summarizer=openrouter_summarizer)
 
     # Summarize with new provider on same reviews
-    res_switch = await service_openai.summarize_game_reviews(game, "critic")
+    res_switch = await service_openrouter.summarize_game_reviews(game, "critic")
     assert res_switch.status == "generated"
-    assert openai_summarizer.call_count == 1
+    assert openrouter_summarizer.call_count == 1
 
-    # Verify DB updated to provider=openai and new fingerprint
+    # Verify DB updated to provider=openrouter and new fingerprint
     await db_session.refresh(sum_fake)
-    assert sum_fake.provider == "openai"
-    assert sum_fake.model == "gpt-4o-mini"
+    assert sum_fake.provider == "openrouter"
+    assert sum_fake.model == "openai/gpt-4o-mini"
     assert sum_fake.input_fingerprint != old_fingerprint
-    assert "Real OpenAI summary" in sum_fake.summary
+    assert "Real OpenRouter summary" in sum_fake.summary
 
     # 3. Subsequent identical run must be skipped_unchanged
-    res_subsequent = await service_openai.summarize_game_reviews(game, "critic")
+    res_subsequent = await service_openrouter.summarize_game_reviews(game, "critic")
     assert res_subsequent.status == "skipped_unchanged"
-    assert openai_summarizer.call_count == 1  # No additional LLM call
+    assert openrouter_summarizer.call_count == 1  # No additional LLM call
+
 
 
 @pytest.mark.asyncio

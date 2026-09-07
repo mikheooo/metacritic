@@ -313,21 +313,44 @@ sum_task = summarize_game_reviews.delay(game_id=11, review_type="both")
 
 ---
 
-## Current Status: Stage 3.1 COMPLETE (Production LLM Verified)
+## Current Status: Stage 3.2 COMPLETE (LLM Provenance & Credential Hygiene Verified)
 
 ### AI Summarizer Providers & Semantics
 
-- **`OpenAIReviewSummarizer` (Production Mode)**:
-  - Backed by OpenAI structured outputs (`client.beta.chat.completions.parse`) with strict Pydantic model (`LLMSummaryResponse`: 2–4 sentence synthesis, exactly 3 likes, exactly 3 dislikes).
-  - Configured via `LLM_PROVIDER=openai`, `OPENAI_API_KEY`, optional `OPENAI_BASE_URL` (supports standard OpenAI API and OpenAI-compatible proxies), and `LLM_MODEL` (e.g. `openai/gpt-4o-mini`).
-  - **Critical Invariant**: If `LLM_PROVIDER=openai` and `OPENAI_API_KEY` is missing or empty, the system raises an explicit controlled configuration error (`ValueError`). **No automatic production fallback to `FakeReviewSummarizer` is permitted.**
+The AI summarization layer strictly separates provider identity in DB/API persistence from the underlying client SDK:
+
+- **`OpenRouterReviewSummarizer` (Production Default)**:
+  - Connects to OpenRouter gateway (`https://openrouter.ai/api/v1`) using OpenAI-compatible SDK with structured JSON outputs (`beta.chat.completions.parse`).
+  - Configured via:
+    ```bash
+    LLM_PROVIDER=openrouter
+    OPENROUTER_API_KEY=sk-or-v1-...
+    OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+    LLM_MODEL=openai/gpt-4o-mini
+    ```
+  - Persists canonical provider as `openrouter` (not `openai`) and model as `openai/gpt-4o-mini`.
+  - **Strict Credential Invariant**: If `LLM_PROVIDER=openrouter` and `OPENROUTER_API_KEY` is missing or empty, the factory raises an explicit controlled `ValueError`. **Zero silent fallback to fake.**
+
+- **`OpenAIReviewSummarizer` (Direct OpenAI Mode)**:
+  - Connects directly to OpenAI (`https://api.openai.com/v1`).
+  - Configured via:
+    ```bash
+    LLM_PROVIDER=openai
+    OPENAI_API_KEY=sk-...
+    OPENAI_BASE_URL=https://api.openai.com/v1
+    LLM_MODEL=gpt-4o-mini
+    ```
+  - Persists canonical provider as `openai`.
+  - **Strict Credential Invariant**: If `LLM_PROVIDER=openai` and `OPENAI_API_KEY` is missing or empty, raises an explicit controlled `ValueError`. **Zero silent fallback to fake.**
+
 - **`FakeReviewSummarizer` (Testing & Deterministic Local Mode)**:
   - Used strictly for unit tests, regression tests, and explicit local dry-run testing (`LLM_PROVIDER=fake`).
   - Fast, fully deterministic, zero-network summarization.
+
 - **Fingerprinting & Cost Control**:
   - `compute_input_fingerprint` uniquely binds review IDs, content hashes, `provider`, `model`, `prompt_version`, `review_type`, and `language`.
-  - Switching provider (e.g. `fake` → `openai`) or model naturally alters the fingerprint, triggering real LLM regeneration.
-  - Subsequent unchanged runs detect the identical fingerprint and strictly bypass the LLM (`skipped_unchanged`), incurring zero token cost.
+  - The hash is sensitive to provider identity (`openrouter` vs `openai` vs `fake`), ensuring proper regeneration upon configuration change.
+  - Subsequent unchanged runs detect the identical fingerprint and strictly bypass LLM calls (`skipped_unchanged`), incurring zero token cost.
 
 ### Checklist
 - [x] Full-stack directory structure & container orchestration
@@ -340,12 +363,14 @@ sum_task = summarize_game_reviews.delay(game_id=11, review_type="both")
 - [x] Per-game failure isolation with transaction savepoints
 - [x] Deterministic review sampling (`select_reviews_for_summary`) with sentiment quota and platform interleaving
 - [x] Canonical SHA-256 fingerprinting (`compute_input_fingerprint`) factoring in review corpus, provider, model, and prompt version
-- [x] Production `OpenAIReviewSummarizer` with structured outputs and explicit error on missing key (no silent fake fallback)
+- [x] Distinct OpenRouter (`OpenRouterReviewSummarizer`) and direct OpenAI (`OpenAIReviewSummarizer`) implementations with structured outputs
+- [x] Strict credential validation for both `openrouter` and `openai` (explicit `ValueError`, no silent fake fallback)
+- [x] Input fingerprint sensitivity verified for `provider=openrouter` vs `provider=openai`
 - [x] System prompt injection defenses with untrusted `<REVIEWS>` delimiters
 - [x] Developer CLI (`python -m app.cli crawl`, `python -m app.cli enrich`) and Celery tasks (`tasks.enrich_game_reviews`, `tasks.summarize_game_reviews`)
 - [x] Frontend UI on `/games/:id` rendering "Critics say" and "Players say" cards with 3 likes, 3 dislikes, review counts, provider/model badges, and review tabs
-- [x] 60 automated tests covering parser, models, API, daily crawler state transitions, sampling, fingerprinting, provider failure, provider switch, and review enrichment
-- [x] Controlled live validation verifying real OpenAI model calls, generated statuses, second-run LLM skipping, zero SQL duplicates, and verified REST API response
+- [x] 61 automated tests covering parser, models, API, daily crawler state transitions, sampling, fingerprinting, provider failure, provider switch, and review enrichment
+- [x] Controlled live validation verifying OpenRouter API calls, `provider=openrouter` in DB and REST API, second-run LLM skipping, and Celery task execution
 - [x] Clean Ruff and mypy validation (0 errors across 47 source files)
 
 
