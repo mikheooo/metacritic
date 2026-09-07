@@ -1,19 +1,21 @@
-# Metacritic AI Games Monitor — Production Platform (Stage 7)
+# Metacritic AI Games Monitor — Platform & Release Architecture
 
 [![Quality Gates](https://img.shields.io/badge/Tests-124%20passed-brightgreen.svg)]()
 [![Code Style: Ruff](https://img.shields.io/badge/Code%20Style-Ruff-000000.svg)]()
 [![Type Checked: Mypy](https://img.shields.io/badge/Type%20Check-Mypy%20Strict-blue.svg)]()
 [![Docker Compose](https://img.shields.io/badge/Orchestration-Docker%20Compose-2496ED.svg)]()
 [![Postgres: pgvector](https://img.shields.io/badge/PostgreSQL%2016-pgvector-336791.svg)]()
-[![Production Ready](https://img.shields.io/badge/Release-Stage%207%20Complete-success.svg)]()
 
-Production-grade, resilient platform designed to ingest, process, enrich, and analyze video game data from Metacritic. Features automated hourly scheduling, AI-driven Russian sentiment summaries, semantic vector similarity via pgvector, YouTube Let's Play video discovery with transcript AI summaries, and realtime Server-Sent Events monitoring.
+Production-like, resilient platform designed to ingest, process, enrich, and analyze video game data from Metacritic. Features automated hourly scheduling, AI-driven Russian sentiment summaries, semantic vector similarity via pgvector, YouTube Let's Play video discovery with transcript AI summaries, and realtime Server-Sent Events monitoring.
 
 ---
 
-## Live Public Deployment
+## Live Demo Deployment
 
-- **Production Application URL**: [https://sides-canyon-alloy-harley.trycloudflare.com](https://sides-canyon-alloy-harley.trycloudflare.com)
+> [!NOTE]
+> The public demo endpoint below is served via a Cloudflare Quick Tunnel connected to the Docker Compose application stack for reviewer evaluation. Database, Redis, and internal backend services are bound strictly to `127.0.0.1` (localhost) to guarantee zero public internet exposure.
+
+- **Demo Application URL**: [https://sides-canyon-alloy-harley.trycloudflare.com](https://sides-canyon-alloy-harley.trycloudflare.com)
 - **API Liveness**: [https://sides-canyon-alloy-harley.trycloudflare.com/health](https://sides-canyon-alloy-harley.trycloudflare.com/health)
 - **API Readiness**: [https://sides-canyon-alloy-harley.trycloudflare.com/ready](https://sides-canyon-alloy-harley.trycloudflare.com/ready)
 - **Realtime Monitor Dashboard**: [https://sides-canyon-alloy-harley.trycloudflare.com/monitor](https://sides-canyon-alloy-harley.trycloudflare.com/monitor)
@@ -26,15 +28,15 @@ Production-grade, resilient platform designed to ingest, process, enrich, and an
 For evaluators reviewing this project, here are the primary features and where to inspect them:
 
 ### 1. Games Catalog (`/`)
-- Dynamic search box filtering by title in realtime.
-- Dynamic platform dropdown populated dynamically from `GET /api/platforms`.
-- Responsive game card grid displaying Metascores, User Scores, release dates, and platforms.
+- Dynamic title search filtering games in realtime.
+- Dynamic platform dropdown populated from `GET /api/platforms`.
+- Responsive game card grid displaying Metascores, User Scores, release dates, and platform badges.
 
 ### 2. Game Detail Page (`/games/:id`, e.g., `/games/11`)
 - **Dual AI Review Summaries**: Visually distinct **"Critics say"** and **"Players say"** consensus cards with 3 likes and 3 dislikes generated in Russian.
 - **Tabbed Review Explorer**: Browse raw critic and user reviews with author, publication, score, and date.
-- **Semantic Similar Games**: pgvector-powered recommendation cards displaying cosine similarity match percentages. Clicking any similar game transitions seamlessly.
-- **YouTube Let's Play Card**: High-relevance gameplay video with thumbnail, duration badge, view count, channel name, transcript availability badge, Russian AI summary, and 5 key gameplay takeaways.
+- **Semantic Similar Games**: pgvector-powered recommendation cards displaying cosine similarity match percentages (TOP-5 matches, configured by `SIMILAR_GAMES_LIMIT = 5`).
+- **YouTube Let's Play Card**: Filtered gameplay video with thumbnail, duration badge, view count, channel name, transcript availability badge, Russian AI summary, and 5 key gameplay takeaways.
 
 ### 3. Realtime Monitor Dashboard (`/monitor`)
 - **Scheduler State**: Displays Celery Beat hourly status (`0 * * * *` UTC) and next scheduled run countdown.
@@ -50,45 +52,45 @@ For evaluators reviewing this project, here are the primary features and where t
 
 ```mermaid
 flowchart TD
-    subgraph ClientLayer["Edge & Client"]
+    subgraph ClientLayer["Edge and Client"]
         Browser["User Browser (Desktop / Mobile)"]
-        CF["Cloudflare Edge Tunnel (HTTPS / WSS / SSE)"]
+        CF["Cloudflare Quick Tunnel (Evaluation HTTPS)"]
     end
 
     subgraph ReverseProxy["Frontend Gateway"]
-        Nginx["Nginx 1.27 (Reverse Proxy & Static Server)"]
+        Nginx["Nginx 1.27 (Reverse Proxy and Static Server)"]
         ReactSPA["React 19 + TypeScript + Vite SPA"]
     end
 
-    subgraph BackendApp["Application Services"]
+    subgraph BackendApp["Application Services (Local Docker Host)"]
         FastAPI["FastAPI Backend (ASGI / Python 3.12)"]
         CeleryWorker["Celery Worker (ForkPool / Async Pipeline)"]
         CeleryBeat["Celery Beat (Hourly Cron: 0 * * * *)"]
     end
 
-    subgraph DataLayer["Persistence & Message Broker"]
-        Postgres[("PostgreSQL 16 + pgvector")]
-        Redis[("Redis 7 (Broker + Crawl Lock)")]
+    subgraph DataLayer["Persistence and Message Broker (Localhost Bound)"]
+        Postgres[("PostgreSQL 16 + pgvector (127.0.0.1:5433)")]
+        Redis[("Redis 7 (127.0.0.1:6380)")]
     end
 
     subgraph ExternalAPIs["External Services"]
         Metacritic["Metacritic.com (HTML Scrape)"]
-        OpenRouter["OpenRouter / OpenAI (LLM & Embeddings)"]
-        YouTube["Google YouTube Data API v3 & Transcripts"]
+        OpenRouter["OpenRouter / OpenAI (LLM and Embeddings)"]
+        YouTube["Google YouTube Data API v3 and Transcripts"]
     end
 
     Browser -->|HTTPS| CF
     CF -->|Port 80| Nginx
     Nginx -->|Static Assets| ReactSPA
-    Nginx -->|Unbuffered SSE & REST /api/| FastAPI
+    Nginx -->|Unbuffered SSE and REST /api/| FastAPI
     FastAPI -->|Read/Write| Postgres
-    FastAPI -->|Cache & Enqueue| Redis
+    FastAPI -->|Cache and Enqueue| Redis
     CeleryBeat -->|Hourly Schedule| Redis
     Redis -->|Tasks| CeleryWorker
-    CeleryWorker -->|Pipelines & Deduplication| Postgres
+    CeleryWorker -->|Pipelines and Deduplication| Postgres
     CeleryWorker -->|HTTP| Metacritic
-    CeleryWorker -->|LLM & Vector API| OpenRouter
-    CeleryWorker -->|Search & Transcripts| YouTube
+    CeleryWorker -->|LLM and Vector API| OpenRouter
+    CeleryWorker -->|Search and Transcripts| YouTube
 ```
 
 ---
@@ -96,7 +98,7 @@ flowchart TD
 ## Core Engineering Invariants & Guarantees
 
 ### 1. Ingestion Pipeline & Deduplication
-- **Calendar Day Cycle**: The first run of each calendar day crawls *Games -> New Releases*; subsequent runs throughout the day advance the persistent *Browse -> Newest* pagination cursor (`?page=N`).
+- **Calendar Day Cycle**: The first run of each calendar day crawls *Games -> New Releases*; subsequent runs throughout the day advance the persistent *Browse -> Newest* pagination cursor (`?page=N`). Implemented in [`backend/app/services/crawler/pipeline_service.py`](file:///backend/app/services/crawler/pipeline_service.py).
 - **Strict Deduplication Ledger**: A game is processed at most once per calendar day, enforced by a database constraint `UniqueConstraint("processing_date", "game_external_id")` on `daily_game_processings`.
 - **Cursor vs. Ledger Separation**: `DailyCrawlState` serves only as an optimization pointer; `DailyGameProcessing` is the strict deduplication authority.
 - **Canonical 20-Game Batch Contract**: Both scheduled runs and manual `Run Now` invocations enforce the canonical batch limit of exactly 20 games (`settings.CRAWL_BATCH_LIMIT = 20`).
@@ -105,23 +107,24 @@ flowchart TD
 
 ### 2. AI Review Summaries & Prompt Hardening
 - **Dual Stream Separation**: Critic reviews and user reviews are stored, sampled, and summarized completely independently.
-- **Deterministic Sentiment Sampling**: Balances positive, mixed, and negative reviews across multiple platforms without randomness.
-- **Prompt Injection Defense**: Review text is treated as untrusted data using explicit delimiter boundaries and system-level instruction guards.
+- **Deterministic Sentiment Sampling**: Balances positive, mixed, and negative reviews across multiple platforms without randomness in [`backend/app/services/ai/sampling.py`](file:///backend/app/services/ai/sampling.py).
+- **Prompt Injection Defense**: Review text is treated as untrusted data using explicit delimiter boundaries and system-level instruction guards in [`backend/app/services/ai/summarizer.py`](file:///backend/app/services/ai/summarizer.py).
 - **SHA-256 Fingerprint Caching**: Canonical review text hashing skips LLM calls when review corpora are unchanged.
 
 ### 3. Semantic Embeddings & pgvector Similarity
-- **Deterministic Text Representation**: Constructed from title, developer, sorted platforms, description, and AI consensus summaries.
+- **Deterministic Text Representation**: Constructed from title, developer, sorted platforms, description, and AI consensus summaries in [`backend/app/services/ai/embedding_builder.py`](file:///backend/app/services/ai/embedding_builder.py).
 - **Cost-Control Fingerprinting**: Embedding generation is skipped if the input fingerprint matches existing stored embeddings.
-- **pgvector Cosine Distance**: Indexed via HNSW (`VECTOR(1536)`) for $O(\log N)$ nearest-neighbor retrieval (`1.0 - (embedding <=> target)`).
-- **Self-Exclusion Invariant**: `CheckConstraint("game_id != similar_game_id")` and atomic recommendation replacement.
+- **pgvector Cosine Distance**: Indexed via HNSW (`VECTOR(1536)`) for $O(\log N)$ nearest-neighbor retrieval (`1.0 - (embedding <=> target)`), returning the TOP 5 similar games (`SIMILAR_GAMES_LIMIT = 5`). Schema created in migration `003_pgvector_game_embeddings_and_similar_games.py`.
+- **Self-Exclusion Invariant**: `CheckConstraint("game_id != similar_game_id")` and atomic recommendation replacement in [`backend/app/services/ai/similarity_service.py`](file:///backend/app/services/ai/similarity_service.py).
 
 ### 4. YouTube Let's Play Integration
-- **Strict Relevance Filtering**: Rejects trailers, OSTs, reviews, reactions, dev diaries, and shorts (`#shorts` or duration `< 180s`).
+- **Strict Relevance Filtering**: Rejects trailers, OSTs, reviews, reactions, dev diaries, and shorts (`#shorts` or duration `< 180s`) in [`backend/app/services/youtube/relevance.py`](file:///backend/app/services/youtube/relevance.py).
 - **Popularity-Ranked Transcript Fallback**: Iterates top candidate videos by view count. If the top video lacks subtitles, it falls back to rank #2, rank #3, etc.
 - **AI Gameplay Summaries**: Generates Russian summary and 5 key gameplay takeaways.
 - **Non-Fatal Isolation**: Failures in YouTube search or transcript fetching never fail the core crawler.
 
 ### 5. Production Security & Hardening
+- **Localhost Port Isolation**: PostgreSQL (`127.0.0.1:5433:5432`), Redis (`127.0.0.1:6380:6379`), and Backend (`127.0.0.1:8000:8000`) are bound strictly to localhost, preventing internet exposure.
 - **Unbuffered SSE**: Nginx reverse proxy configured with `proxy_buffering off; proxy_cache off; proxy_read_timeout 24h;` for instant event delivery.
 - **Rate-Limiting Cooldown**: `MANUAL_RUN_COOLDOWN_SECONDS = 60` returns HTTP 429 Too Many Requests if manual runs are triggered in rapid succession.
 - **Information Disclosure Shielding**: Global exception handler masks unhandled 500 errors; debug docs (`/docs`, `/redoc`) are disabled in production.
@@ -136,7 +139,7 @@ flowchart TD
 - **Frontend**: React 19, TypeScript, Vite, Nginx 1.27
 - **AI & Embeddings**: OpenRouter / OpenAI API (`gpt-4o-mini`, `text-embedding-3-small`)
 - **Video & Transcripts**: Google YouTube Data API v3, `youtube-transcript-api`
-- **Orchestration & Edge**: Docker, Docker Compose, Cloudflare Tunnel
+- **Orchestration & Edge**: Docker, Docker Compose, Cloudflare Quick Tunnel
 - **Quality & Testing**: pytest, pytest-asyncio, Ruff, mypy
 
 ---
@@ -239,13 +242,13 @@ docker compose run --rm backend alembic downgrade -1
 docker compose run --rm backend alembic history
 ```
 
-**Migration Sequence**:
+**Verified Migration Sequence**:
 1. `001_initial_schema.py`: Games, platforms, game-platform associations, crawl runs.
-2. `002_add_reviews_and_summaries.py`: Reviews, game review summaries.
-3. `003_add_pgvector_and_embeddings.py`: pgvector extension, game embeddings table.
-4. `004_create_similar_games_table.py`: Similar games cached relationships.
-5. `005_crawl_runs_evolution_and_events.py`: Append-only crawl events, rich run metadata.
-6. `006_youtube_letsplay.py`: YouTube videos, transcripts, and AI video summaries.
+2. `c5f1c3786bf9_002_review_enrichment_and_summaries.py`: Reviews, game review summaries, enrichment fields.
+3. `003_pgvector_game_embeddings_and_similar_games.py`: pgvector extension, `VECTOR(1536)` embeddings, and `similar_games` table.
+4. `004_platform_data_quality_cleanup.py`: Platform normalization and data quality cleanup.
+5. `005_crawl_runs_evolution_and_events.py`: Append-only `crawl_run_events` audit table, rich run metadata.
+6. `006_youtube_letsplay.py`: `game_youtube_videos`, `youtube_transcripts`, and `youtube_summaries` tables.
 
 ---
 
