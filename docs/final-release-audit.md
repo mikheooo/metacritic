@@ -1,9 +1,9 @@
-# Metacritic AI Games Monitor — Final Release Audit (Stage 7.2 & Cover Hotfix)
+# Metacritic AI Games Monitor — Final Release Audit (Stage 7.2 & Cover Completeness)
 
-**Document Version**: 1.0.4  
+**Document Version**: 1.0.5  
 **Release Date**: September 8, 2026  
 **Status**: AUDITED — COMPLETE  
-**Git Baseline**: `c3b5c4a9d59b2b906098cf594751152f24026900` / `v1.0.3` (closed in `v1.0.4`)  
+**Git Baseline**: `6c0fe608f89f397e79fc4bc64e6ecc4e34ac1ad5` / `v1.0.4` (closed in `v1.0.5`)  
 **Evaluation Demo URL**: [https://metacritic-ai-monitor.tail0c0b53.ts.net](https://metacritic-ai-monitor.tail0c0b53.ts.net) (Persistent Tailscale Funnel)
 
 ---
@@ -29,9 +29,9 @@ The **Metacritic AI Games Monitor** platform fulfills 100% of functional, archit
 | Area | Requirement | Spec / Expected Invariant | Status | Verification Reference |
 | :--- | :--- | :---: | :--- |
 | **Ingestion** | Metacritic Parser | Pure HTML parser with typed DTOs, decoupled from HTTP transport | **PASS** | `backend/app/services/crawler/parser.py` |
-| **Ingestion** | Cover Extraction Cascade | Multi-tier cascade (JSON-LD string/dict/list, `@graph` VideoGame, OpenGraph `og:image`, Twitter Card `twitter:image`, DOM hero/picture/lazy) + URL normalization + placeholder filtering | **PASS** | `backend/app/services/crawler/parser.py` |
+| **Ingestion** | Cover Extraction Cascade | Multi-tier cascade (JSON-LD string/dict/list, `@graph` VideoGame, OpenGraph `og:image`, Twitter Card `twitter:image`, DOM hero/picture/lazy, and listing cards New Releases/Browse) with 4-tier priority (detail > listing > DB > None) | **PASS** | `backend/app/services/crawler/parser.py` |
 | **Frontend** | Resilient Cover Fallbacks | Styled dark-theme `No Cover` card placeholder (16:9 aspect ratio, no grid collapse, infinite loop guard) + detail page placeholder | **PASS** | `GameCard.tsx` & `GameDetailPage.tsx` |
-| **Ingestion** | Non-Destructive Backfill | Safe CLI backfill (`app/cli.py backfill-covers`) modifying ONLY `cover_url` with rate-limiting; zero impact on summaries/embeddings/videos | **PASS** | `backend/scripts/backfill_covers.py` |
+| **Ingestion** | Non-Destructive Backfill | Safe CLI backfill (`app/cli.py backfill-covers`) checking detail pages & listing cards, modifying ONLY `cover_url` with rate-limiting; zero impact on summaries/embeddings/videos | **PASS** | `backend/app/cli.py` |
 | **Ingestion** | Calendar Day Cycle | First run of calendar day parses *New Releases*; subsequent runs parse *Browse -> Newest* (`?page=N`) | **PASS** | `backend/app/services/crawler/pipeline_service.py` |
 | **Ingestion** | Canonical Batch Limit | Exactly 20 games per scheduled/manual run (`settings.CRAWL_BATCH_LIMIT = 20`) | **PASS** | Runs #4 (20/20) and #5 (20/20) post-IPv6 fix |
 | **Ingestion** | Deduplication Ledger | `UniqueConstraint("processing_date", "game_external_id")` on `daily_game_processings` | **PASS** | 0 duplicate rows |
@@ -147,13 +147,13 @@ flowchart TD
 
 ---
 
-## 5. Automated Quality Gates
+### 5. Automated Quality Gates
 
-1. **Unit & Integration Tests**: `pytest backend/tests`: **134 passed, 0 failed, 0 errors** (+10 new parser unit tests in `tests/test_crawler_parser.py`).
+1. **Unit & Integration Tests**: `pytest backend/tests`: **141 passed, 0 failed, 0 errors** (+7 new listing cover & priority unit tests).
 2. **Code Linting (Ruff)**: `ruff check .`: **All checks passed!**
 3. **Code Formatting (Ruff)**: `ruff format --check .`: **100 files clean**.
 4. **Static Type Checking (Mypy)**: `mypy app`: **Success: no issues found in 66 source files**.
-5. **Frontend Build**: `npm run build`: Succeeded with zero TypeScript diagnostics (built in 570ms).
+5. **Frontend Build**: `npm run build`: Succeeded with zero TypeScript diagnostics (built in 588ms).
 
 ---
 
@@ -168,24 +168,11 @@ flowchart TD
 {"status": "ready", "database": "connected", "error": null}
 ```
 
-### 2. Game Detail with Russian AI Reviews, Similar Games (Top-5), and YouTube Let's Play (Elden Ring, ID: 11)
-Validated via `GET /api/games/11` on the Funnel URL.
-
-### 3. Realtime Monitor Status API & SSE
-- `GET /api/monitor/status` → `scheduler.enabled=true`, `timezone=UTC`, `worker.online=true`.
-- `GET /api/monitor/stream` → `event: snapshot` + `: ping` heartbeat + `Last-Event-ID` reconnect verified both locally and through the Funnel.
-
-### 4. Run Now Protections
-- `POST /api/crawler/run` → **202** (`target_count=20`),
-- concurrent → **409** (`detail: active run`),
-- cooldown → **429** (`retry_after_seconds: 20`) — all verified post-reboot on the Funnel host.
-
-### 5. Real Pipeline (IPv6)
-- Metacritic scrape → 28 games, 457 reviews persisted,
-- OpenRouter (`gpt-4o-mini` + `text-embedding-3-small`) → 29 summaries, 20 embeddings,
-- YouTube Data API → search 200 OK, `videos` 200 OK,
-- `youtube-transcript-api` → `list` + `fetch` 1.0 s/0.2 s via IPv6 (fixed by `gai.conf`),
-- Similarity rebuild → 135 associations.
+### 2. Live Browser Verification & UI Fallbacks
+- Verified via BrowserOS Neo on `https://metacritic-ai-monitor.tail0c0b53.ts.net/`:
+  - Catalog Grid: `.game-card` elements maintain identical bounding geometry (`width: 290px, height: 392.4px`) across games with covers and games with placeholders.
+  - Games without covers (`MOO-A-DOODLE-DOO`, `Blackwire`, `Deep miner`): render dark-theme `.game-cover-placeholder` with gamepad vector icon and `No Cover` label; zero layout collapse, zero infinite error loops, zero broken image icons.
+  - Detail Pages: render `.detail-cover-placeholder` hero banner.
 
 ---
 
@@ -206,7 +193,6 @@ All AI collaboration transcripts (Stages 1 through 7 and Post-Release Cover Hotf
 
 **VERDICT**:
 ```text
-STAGE 7 — COMPLETE (v1.0.4 Release-Truth & Provenance Closure)
+COVER COMPLETENESS CLOSURE — COMPLETE (v1.0.5)
 ```
-Persistent VM exists, is not dependent on the local PC, serves a stable Funnel hostname that survives restart/reboot, keeps Postgres/Redis private, runs with production env, immutable Docker images rebuilt from clean source on the host, worker (concurrency=1) online, Beat hourly (`0 * * * *` UTC, `limit=20`), SSE works, Run Now works, DB persists (148 games, 119 covers + 29 graceful UI placeholders), all quality gates green (134/134 tests).
-
+Persistent VM exists, is not dependent on the local PC, serves a stable Funnel hostname that survives restart/reboot, keeps Postgres/Redis private, runs with production env, immutable Docker images rebuilt from clean source on the host, worker (concurrency=1) online, Beat hourly (`0 * * * *` UTC, `limit=20`), SSE works, Run Now works, DB persists (with listing-card cover extraction and graceful UI placeholders), all quality gates green (141/141 tests).

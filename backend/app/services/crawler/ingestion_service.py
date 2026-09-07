@@ -175,6 +175,7 @@ class IngestionService:
         details: GameDetails,
         crawl_run_id: int | None,
         processing_date: date,
+        candidate_cover_url: str | None = None,
     ) -> Game:
         """
         Atomically persist or update game, platforms, scores,
@@ -191,12 +192,19 @@ class IngestionService:
         res = await self.db.execute(stmt)
         game = res.scalar_one_or_none()
 
+        # Cover resolution priority:
+        # 1. details.cover_url (if valid)
+        # 2. candidate_cover_url (if details.cover_url missing)
+        # 3. game.cover_url (if already existing in DB and valid)
+        # 4. None
+        chosen_cover = details.cover_url or candidate_cover_url or None
+
         if not game:
             game = Game(
                 title=details.title,
                 metacritic_slug=canonical_slug,
                 metacritic_url=canonical_url,
-                cover_url=details.cover_url,
+                cover_url=chosen_cover,
                 developer=details.developer,
                 description=details.description,
                 trailer_url=details.trailer_url,
@@ -213,6 +221,10 @@ class IngestionService:
             game.metacritic_url = canonical_url
             if details.cover_url:
                 game.cover_url = details.cover_url
+            elif candidate_cover_url and not game.cover_url:
+                game.cover_url = candidate_cover_url
+            # Preserve existing valid DB cover if neither details nor candidate provides one
+
             if details.developer:
                 game.developer = details.developer
             if details.description:
@@ -356,6 +368,7 @@ class IngestionService:
                             details=details,
                             crawl_run_id=crawl_run.id if crawl_run else None,
                             processing_date=today,
+                            candidate_cover_url=candidate.cover_url,
                         )
 
                     processed_count += 1

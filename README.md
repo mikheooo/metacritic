@@ -1,6 +1,6 @@
 # Metacritic AI Games Monitor — Platform & Release Architecture
 
-[![Quality Gates](https://img.shields.io/badge/Tests-134%20passed-brightgreen.svg)]()
+[![Quality Gates](https://img.shields.io/badge/Tests-141%20passed-brightgreen.svg)]()
 [![Code Style: Ruff](https://img.shields.io/badge/Code%20Style-Ruff-000000.svg)]()
 [![Type Checked: Mypy](https://img.shields.io/badge/Type%20Check-Mypy%20Strict-blue.svg)]()
 [![Docker Compose](https://img.shields.io/badge/Orchestration-Docker%20Compose-2496ED.svg)]()

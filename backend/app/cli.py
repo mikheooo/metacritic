@@ -282,28 +282,80 @@ async def run_backfill_covers_command(
             timeout=15.0,
             follow_redirects=True,
         ) as client:
+            # First, collect candidate thumbnails from New Releases and Browse listing pages
+            listing_covers: dict[str, tuple[str, str]] = {}
+            print("Scanning Metacritic listing pages for candidate cover artwork...")
+            try:
+                r_nr = await client.get("https://www.metacritic.com/game/")
+                if r_nr.status_code == 200:
+                    for cand in MetacriticParser.parse_new_releases(r_nr.text):
+                        if cand.cover_url:
+                            listing_covers[cand.external_id] = ("New Releases", cand.cover_url)
+                for page in range(1, 16):
+                    r_bp = await client.get(
+                        f"https://www.metacritic.com/browse/game/all/all/all-time/new/?page={page}"
+                    )
+                    if r_bp.status_code != 200:
+                        break
+                    bp = MetacriticParser.parse_browse_page(r_bp.text, page=page)
+                    for cand in bp.candidates:
+                        if cand.cover_url and cand.external_id not in listing_covers:
+                            listing_covers[cand.external_id] = (
+                                f"Browse Page {page}",
+                                cand.cover_url,
+                            )
+                    if not bp.has_next:
+                        break
+                    await asyncio.sleep(0.1)
+            except Exception as exc:
+                print(f"  Warning: listing scan encountered error: {exc}")
+
+            print(f"Listing pages scanned. Found {len(listing_covers)} candidate covers.\n")
+
+            audit_rows: list[tuple[int, str, str, str, str | None]] = []
+
             for idx, game in enumerate(games_to_check, 1):
                 url = game.metacritic_url
+                new_cover: str | None = None
+                source_used = "Detail Page"
+
                 print(f"[{idx}/{total_scanned}] Game #{game.id}: '{game.title}'")
                 try:
                     resp = await client.get(url)
                     if resp.status_code == 200:
                         details = MetacriticParser.parse_game_details(resp.text, url)
                         new_cover = details.cover_url
-                        if new_cover:
-                            found_count += 1
-                            print(f"  -> Found cover: {new_cover}")
-                            if not dry_run:
-                                game.cover_url = new_cover
-                                updated_count += 1
-                        else:
-                            print("  -> No cover available on Metacritic")
                     else:
-                        print(f"  -> HTTP {resp.status_code} fetching page")
+                        print(f"  -> HTTP {resp.status_code} fetching detail page")
                         failed_requests += 1
                 except Exception as e:
-                    print(f"  -> Error: {e}")
+                    print(f"  -> Error fetching detail page: {e}")
                     failed_requests += 1
+
+                # Priority 2: listing-card cover if detail-page cover absent
+                if not new_cover and game.metacritic_slug in listing_covers:
+                    source_name, cand_cover = listing_covers[game.metacritic_slug]
+                    new_cover = cand_cover
+                    source_used = f"Listing ({source_name})"
+
+                if new_cover:
+                    found_count += 1
+                    print(f"  -> Found cover via {source_used}: {new_cover}")
+                    if not dry_run:
+                        game.cover_url = new_cover
+                        updated_count += 1
+                else:
+                    print("  -> No cover available on Metacritic (detail, listing, or Nuxt)")
+
+                audit_rows.append(
+                    (
+                        game.id,
+                        game.title,
+                        source_used if new_cover else "Metacritic (Detail + Listing)",
+                        "yes" if new_cover else "no",
+                        new_cover,
+                    )
+                )
 
                 if delay > 0 and idx < total_scanned:
                     await asyncio.sleep(delay)
@@ -311,6 +363,12 @@ async def run_backfill_covers_command(
         if not dry_run and updated_count > 0:
             await session.commit()
             print(f"\n[SUCCESS] Committed {updated_count} cover updates to database.")
+
+        print("\n=== DRY-RUN / AUDIT TABLE ===")
+        print("| id | title | listing source | image found yes/no | image URL |")
+        print("|---|---|---|---|---|")
+        for gid, gtitle, gsrc, gfound, gurl in audit_rows:
+            print(f"| {gid} | {gtitle} | {gsrc} | {gfound} | {gurl or 'None'} |")
 
         remaining = total_scanned - (updated_count if not dry_run else found_count)
         print("----------------------------------------------------------------------")

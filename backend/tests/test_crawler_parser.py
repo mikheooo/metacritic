@@ -418,3 +418,108 @@ def test_cover_extraction_empty_or_corrupted_html() -> None:
         ).cover_url
         is None
     )
+
+
+def test_parse_new_releases_cover_extraction_src_data_src_srcset() -> None:
+    """Verify New Releases card image extraction from src, data-src, and srcset."""
+    html_src = """
+    <div data-testid="product-card">
+      <a href="/game/src-game/"><h3 data-testid="product-card-title">Src Game</h3></a>
+      <div data-testid="product-card-image-container">
+        <img src="https://www.metacritic.com/a/img/src_cover.jpg" />
+      </div>
+    </div>
+    """
+    c_src = MetacriticParser.parse_new_releases(html_src)
+    assert len(c_src) == 1
+    assert c_src[0].cover_url == "https://www.metacritic.com/a/img/src_cover.jpg"
+
+    html_datasrc = """
+    <div data-testid="product-card">
+      <a href="/game/datasrc-game/"><h3 data-testid="product-card-title">DataSrc Game</h3></a>
+      <div data-testid="product-card-image-container">
+        <img data-src="https://www.metacritic.com/a/img/datasrc_cover.jpg" />
+      </div>
+    </div>
+    """
+    c_datasrc = MetacriticParser.parse_new_releases(html_datasrc)
+    assert len(c_datasrc) == 1
+    assert c_datasrc[0].cover_url == "https://www.metacritic.com/a/img/datasrc_cover.jpg"
+
+    html_srcset = """
+    <div data-testid="product-card">
+      <a href="/game/srcset-game/"><h3 data-testid="product-card-title">Srcset Game</h3></a>
+      <div data-testid="product-card-image-container">
+        <img srcset="https://www.metacritic.com/a/img/srcset_1x.jpg 1x, https://www.metacritic.com/a/img/srcset_2x.jpg 2x" />
+      </div>
+    </div>
+    """
+    c_srcset = MetacriticParser.parse_new_releases(html_srcset)
+    assert len(c_srcset) == 1
+    assert c_srcset[0].cover_url == "https://www.metacritic.com/a/img/srcset_1x.jpg"
+
+
+def test_parse_browse_card_cover_extraction() -> None:
+    """Verify Browse card image extraction from nested picture source and img."""
+    html = """
+    <div class="c-finderProductCard" data-testid="filter-results">
+      <a href="/game/browse-game/">
+        <picture>
+          <source srcset="https://www.metacritic.com/a/img/browse_pic.jpg 1x" />
+          <img src="https://www.metacritic.com/a/img/browse_fallback.jpg" />
+        </picture>
+        <h3 data-testid="product-title">Browse Game</h3>
+      </a>
+    </div>
+    """
+    page = MetacriticParser.parse_browse_page(html, page=1)
+    assert len(page.candidates) == 1
+    assert page.candidates[0].cover_url == "https://www.metacritic.com/a/img/browse_pic.jpg"
+
+
+def test_listing_card_relative_and_protocol_relative_url() -> None:
+    """Verify normalization of relative and protocol-relative URLs on listing cards."""
+    html = """
+    <div data-testid="product-card">
+      <a href="/game/rel-game/"><h3 data-testid="product-card-title">Rel Game</h3></a>
+      <div data-testid="product-card-image-container">
+        <img src="/a/img/catalog/relative.jpg" />
+      </div>
+    </div>
+    <div data-testid="product-card">
+      <a href="/game/proto-game/"><h3 data-testid="product-card-title">Proto Game</h3></a>
+      <div data-testid="product-card-image-container">
+        <img src="//images.metacritic.com/proto.jpg" />
+      </div>
+    </div>
+    """
+    candidates = MetacriticParser.parse_new_releases(html)
+    assert len(candidates) == 2
+    assert candidates[0].cover_url == "https://www.metacritic.com/a/img/catalog/relative.jpg"
+    assert candidates[1].cover_url == "https://images.metacritic.com/proto.jpg"
+
+
+def test_listing_card_placeholder_rejection() -> None:
+    """Verify placeholder images on listing cards are rejected and return None."""
+    html = """
+    <div data-testid="filter-results">
+      <a href="/game/placeholder-game/">
+        <div data-testid="product-image">
+          <img src="https://www.metacritic.com/images/default-boxart.jpg" />
+        </div>
+        <h3 data-testid="product-title">Placeholder Game</h3>
+      </a>
+    </div>
+    <div data-testid="filter-results">
+      <a href="/game/no-img-game/">
+        <div data-testid="product-image">
+          <div class="c-globalImagePlaceholder"></div>
+        </div>
+        <h3 data-testid="product-title">No Img Game</h3>
+      </a>
+    </div>
+    """
+    page = MetacriticParser.parse_browse_page(html, page=1)
+    assert len(page.candidates) == 2
+    assert page.candidates[0].cover_url is None
+    assert page.candidates[1].cover_url is None

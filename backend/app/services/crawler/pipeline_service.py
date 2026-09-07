@@ -301,6 +301,7 @@ class MetacriticPipelineService:
                                 details=game_details,
                                 crawl_run_id=crawl_run.id,
                                 processing_date=today,
+                                candidate_cover_url=candidate.cover_url,
                             )
                         await self.db.commit()
 

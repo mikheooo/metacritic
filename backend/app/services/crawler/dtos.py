@@ -41,6 +41,7 @@ class GameCandidate:
     url: str
     external_id: str
     release_date: str | None = None
+    cover_url: str | None = None
 
 
 @dataclass

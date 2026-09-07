@@ -354,6 +354,43 @@ def _extract_cover_url(
     return None
 
 
+def _extract_card_cover_url(card: Any, base_url: str = "https://www.metacritic.com") -> str | None:
+    """Extract game cover URL from a listing card (New Releases or Browse)."""
+    if card is None:
+        return None
+
+    img_container = (
+        _find_by_testid(card, "product-card-image-container")
+        or _find_by_testid(card, "product-image")
+        or card
+    )
+
+    # Check <source> srcset inside <picture>
+    for source in img_container.find_all("source"):
+        srcset = _get_attr(source, "srcset")
+        if srcset:
+            first_src = srcset.split(",")[0].strip().split()[0]
+            cand = _normalize_cover_url(first_src, base_url)
+            if cand:
+                return cand
+
+    # Check <img> tags
+    for img in img_container.find_all("img"):
+        for attr in ("data-src", "src"):
+            val = _get_attr(img, attr)
+            cand = _normalize_cover_url(val, base_url)
+            if cand:
+                return cand
+        srcset = _get_attr(img, "srcset")
+        if srcset:
+            first_src = srcset.split(",")[0].strip().split()[0]
+            cand = _normalize_cover_url(first_src, base_url)
+            if cand:
+                return cand
+
+    return None
+
+
 class MetacriticParser:
     """
     Pure parser functions for extracting domain DTOs from raw HTML.
@@ -392,12 +429,15 @@ class MetacriticParser:
                 or slug.replace("-", " ").title()
             )
 
+            cover_url = _extract_card_cover_url(card)
+
             seen_ids.add(slug)
             candidates.append(
                 GameCandidate(
                     title=title,
                     url=normalize_canonical_url(href),
                     external_id=slug,
+                    cover_url=cover_url,
                 )
             )
 
@@ -415,12 +455,14 @@ class MetacriticParser:
                     and slug not in seen_ids
                     and not any(k in href for k in ["critic-reviews", "user-reviews"])
                 ):
+                    cover_url = _extract_card_cover_url(a)
                     seen_ids.add(slug)
                     candidates.append(
                         GameCandidate(
                             title=link_title,
                             url=normalize_canonical_url(href),
                             external_id=slug,
+                            cover_url=cover_url,
                         )
                     )
 
@@ -463,6 +505,8 @@ class MetacriticParser:
             date_elem = card.find(class_=re.compile(r"release-date", re.I))
             release_date = _clean_text(date_elem.get_text() if date_elem else None)
 
+            cover_url = _extract_card_cover_url(card)
+
             seen_ids.add(slug)
             candidates.append(
                 GameCandidate(
@@ -470,6 +514,7 @@ class MetacriticParser:
                     url=normalize_canonical_url(href),
                     external_id=slug,
                     release_date=release_date,
+                    cover_url=cover_url,
                 )
             )
 

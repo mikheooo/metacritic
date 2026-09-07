@@ -465,3 +465,102 @@ async def test_11_page_content_changes_between_runs_daily_ledger_prevents_dups(
     # Only Game C should be processed; Game B is skipped by daily ledger!
     assert res2.processed_count == 1
     assert res2.candidates == ["Game C"]
+
+
+async def test_upsert_detail_cover_overrides_listing_cover(
+    db_session: AsyncSession,
+) -> None:
+    """Verify detail-page cover takes precedence over candidate listing cover."""
+    source = MockMetacriticSource()
+    service = IngestionService(db=db_session, source=source)
+    today = date(2026, 9, 7)
+
+    details = GameDetails(
+        external_id="cover-override-test",
+        metacritic_url="https://www.metacritic.com/game/cover-override-test/",
+        metacritic_slug="cover-override-test",
+        title="Cover Override Test",
+        cover_url="https://www.metacritic.com/a/img/detail_cover.jpg",
+    )
+
+    game = await service.upsert_game_details(
+        details=details,
+        crawl_run_id=None,
+        processing_date=today,
+        candidate_cover_url="https://www.metacritic.com/a/img/listing_cover.jpg",
+    )
+    await db_session.commit()
+
+    assert game.cover_url == "https://www.metacritic.com/a/img/detail_cover.jpg"
+
+
+async def test_upsert_listing_cover_used_when_detail_cover_missing(
+    db_session: AsyncSession,
+) -> None:
+    """Verify listing card cover is used when detail-page cover is missing."""
+    source = MockMetacriticSource()
+    service = IngestionService(db=db_session, source=source)
+    today = date(2026, 9, 7)
+
+    details = GameDetails(
+        external_id="listing-fallback-test",
+        metacritic_url="https://www.metacritic.com/game/listing-fallback-test/",
+        metacritic_slug="listing-fallback-test",
+        title="Listing Fallback Test",
+        cover_url=None,
+    )
+
+    game = await service.upsert_game_details(
+        details=details,
+        crawl_run_id=None,
+        processing_date=today,
+        candidate_cover_url="https://www.metacritic.com/a/img/listing_thumbnail.jpg",
+    )
+    await db_session.commit()
+
+    assert game.cover_url == "https://www.metacritic.com/a/img/listing_thumbnail.jpg"
+
+
+async def test_upsert_existing_valid_db_cover_preserved(
+    db_session: AsyncSession,
+) -> None:
+    """Verify an existing valid DB cover is preserved when both detail and listing covers are None."""
+    source = MockMetacriticSource()
+    service = IngestionService(db=db_session, source=source)
+    today = date(2026, 9, 7)
+
+    # Initial insert with a valid cover
+    details1 = GameDetails(
+        external_id="preserve-db-cover-test",
+        metacritic_url="https://www.metacritic.com/game/preserve-db-cover-test/",
+        metacritic_slug="preserve-db-cover-test",
+        title="Preserve Cover Test",
+        cover_url="https://www.metacritic.com/a/img/existing_db_cover.jpg",
+    )
+    game1 = await service.upsert_game_details(
+        details=details1,
+        crawl_run_id=None,
+        processing_date=today,
+    )
+    await db_session.commit()
+    assert game1.cover_url == "https://www.metacritic.com/a/img/existing_db_cover.jpg"
+
+    # Subsequent update on next day where detail and listing both have None cover
+    details2 = GameDetails(
+        external_id="preserve-db-cover-test",
+        metacritic_url="https://www.metacritic.com/game/preserve-db-cover-test/",
+        metacritic_slug="preserve-db-cover-test",
+        title="Preserve Cover Test Updated",
+        cover_url=None,
+    )
+    game2 = await service.upsert_game_details(
+        details=details2,
+        crawl_run_id=None,
+        processing_date=date(2026, 9, 8),
+        candidate_cover_url=None,
+    )
+    await db_session.commit()
+
+    # DB cover must NOT be replaced with None
+    assert game2.cover_url == "https://www.metacritic.com/a/img/existing_db_cover.jpg"
+    assert game2.title == "Preserve Cover Test Updated"
