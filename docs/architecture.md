@@ -1,0 +1,105 @@
+# Architecture Overview
+
+This document describes the foundational architecture of the Metacritic Game Analysis platform.
+
+## System Diagram
+
+```
++-------------------------------------------------------------+
+|                      React Frontend (Vite)                  |
+|                Routes: / , /games/:id , /monitor            |
++------------------------------+------------------------------+
+                               |
+                               | HTTP / JSON REST API
+                               v
++-------------------------------------------------------------+
+|                     FastAPI Backend (v1)                    |
+|             /health, /ready, /api/games, /api/games/{id}    |
++------------------------------+------------------------------+
+                               |
+                               | Async SQLAlchemy 2.0 (asyncpg)
+                               v
++-------------------------------------------------------------+
+|                   PostgreSQL Database (pgvector)            |
+|       Games, Platforms, Reviews, SimilarGames, CrawlState   |
++-------------------------------------------------------------+
+
+                      [ Background Processing ]
+
++-------------------------------------------------------------+
+|                      Scheduler (Future)                     |
+|                 Hourly crawl triggers / tasks               |
++------------------------------+------------------------------+
+                               |
+                               | Task Dispatch (AMPQ/Redis)
+                               v
++-------------------------------------------------------------+
+|                         Redis 7                             |
+|                 Broker + Result Backend                     |
++------------------------------+------------------------------+
+                               |
+                               | Task Consumer
+                               v
++-------------------------------------------------------------+
+|                      Celery Workers                         |
+|         Diagnostics (ping) -> Future Ingestion Pipelines    |
++-------------------------------------------------------------+
+```
+
+---
+
+## Component Responsibilities
+
+### 1. Frontend (React 19 + TypeScript + Vite)
+- User interface for browsing ingested games, filtering by platform, searching by title, and sorting by Metascore/UserScore.
+- Detail view showing game metadata, platform scores, and critic/user summaries.
+- Monitor dashboard providing visibility into Celery worker status and future crawl runs.
+
+### 2. Backend API (FastAPI)
+- Exposes structured REST endpoints under `/api`.
+- Validates all request parameters with Pydantic v2 schemas.
+- Strictly whitelists sort fields (`metascore`, `userscore`, `title`, `created_at`) and directions (`asc`, `desc`) to prevent SQL injection vulnerabilities.
+- Performs health (`/health`) and database connectivity readiness checks (`/ready`).
+
+### 3. Database Layer (PostgreSQL + SQLAlchemy 2.0 + Alembic)
+- **Game**: Core catalog entity containing title, external Metacritic identifiers (`metacritic_slug`, `metacritic_url`), media links, developer, summaries, and nullable embedding vector/JSON.
+- **Platform & GamePlatform**: Normalized platforms with unique slugs and an explicit M:N association table storing platform-specific Metascore and UserScore, enforced by `UniqueConstraint("game_id", "platform_id")`.
+- **Review**: Critic and user reviews with deduplication constraint `UniqueConstraint("game_id", "review_type", "external_id")`.
+- **SimilarGame**: Similarity edges with a check constraint `game_id != similar_game_id` and unique pair constraint `UniqueConstraint("game_id", "similar_game_id")`.
+- **Crawl Infrastructure**:
+  - `CrawlRun`: Audit log of crawl executions (status, trigger_type, timestamps, counts).
+  - `DailyCrawlState`: Cursor state tracking daily crawl phases (`new_releases`, `browse`).
+  - `DailyGameProcessing`: **Critical project invariant** guaranteeing no game is processed more than once within the same calendar day via `UniqueConstraint("processing_date", "game_external_id")`.
+
+### 4. Background Infrastructure (Redis + Celery)
+- Celery worker connected to Redis for broker and result storage.
+- Stage 1 provides a diagnostic `tasks.ping` task returning `"pong"` to verify infrastructure readiness.
+
+---
+
+## Future Ingestion & AI Pipeline Boundaries
+
+In subsequent stages, the background processing will follow strict pipeline boundaries:
+
+```
+[1. Source Discovery]
+      │  Discovers new releases or paginated browse links on Metacritic
+      ▼
+[2. Scraping]
+      │  Fetches game pages, platform scores, critic reviews, and user reviews
+      ▼
+[3. Normalization]
+      │  Parses raw HTML/JSON into typed schemas, sanitizes text, validates scores
+      ▼
+[4. Persistence & Deduplication]
+      │  Applies DailyGameProcessing calendar invariant, updates Games and GamePlatforms
+      ▼
+[5. Review Analysis (AI / LLM)]
+      │  Extracts key themes, sentiment, pros/cons, and produces structured summaries
+      ▼
+[6. Similarity Engine]
+      │  Generates embeddings for games and calculates vector similarity rankings
+      ▼
+[7. Enrichment (YouTube & Media)]
+      │  Fetches related video coverage, trailers, and reviews
+```
