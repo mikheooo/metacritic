@@ -1,1 +1,0 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/api/client.ts","./src/components/gamecard.tsx","./src/components/header.tsx","./src/components/scorebadge.tsx","./src/pages/gamedetailpage.tsx","./src/pages/gamespage.tsx","./src/pages/monitorpage.tsx","./src/types/index.ts"],"version":"5.9.3"}
