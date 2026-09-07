@@ -46,7 +46,16 @@ class YouTubeTranscriptApiProvider:
     provider: str = "youtube-transcript-api"
 
     def __init__(self, preferred_languages: list[str] | None = None) -> None:
-        self.preferred_languages = preferred_languages or settings.YOUTUBE_TRANSCRIPT_LANGUAGES
+        if preferred_languages is not None:
+            self.preferred_languages = preferred_languages
+        elif isinstance(settings.YOUTUBE_TRANSCRIPT_LANGUAGES, list):
+            self.preferred_languages = settings.YOUTUBE_TRANSCRIPT_LANGUAGES
+        else:
+            self.preferred_languages = [
+                s.strip()
+                for s in str(settings.YOUTUBE_TRANSCRIPT_LANGUAGES).split(",")
+                if s.strip()
+            ]
 
     def _sync_fetch(self, video_id: str, pref_langs: list[str]) -> TranscriptResult:
         try:

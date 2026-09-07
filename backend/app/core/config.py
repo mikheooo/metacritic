@@ -101,11 +101,11 @@ class Settings(BaseSettings):
     YOUTUBE_API_KEY: str | None = None
     YOUTUBE_ENABLED: bool = True
     YOUTUBE_SEARCH_RESULTS_LIMIT: int = 10
-    YOUTUBE_TRANSCRIPT_LANGUAGES: list[str] = ["en", "ru"]
+    YOUTUBE_TRANSCRIPT_LANGUAGES: list[str] | str = ["en", "ru"]
     YOUTUBE_SEARCH_REFRESH_HOURS: int = 24
     YOUTUBE_PROMPT_VERSION: str = "v1"
 
-    @field_validator("YOUTUBE_TRANSCRIPT_LANGUAGES", mode="before")
+    @field_validator("YOUTUBE_TRANSCRIPT_LANGUAGES", mode="after")
     @classmethod
     def assemble_transcript_languages(cls, v: object) -> list[str]:
         if isinstance(v, str):
