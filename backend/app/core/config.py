@@ -15,6 +15,14 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
     API_V1_STR: str = "/api"
+    APP_TIMEZONE: str = "UTC"
+
+    # Crawler Settings
+    METACRITIC_BASE_URL: str = "https://www.metacritic.com"
+    CRAWLER_BATCH_LIMIT: int = 20
+    CRAWLER_RATE_LIMIT_DELAY: float = 0.5
+    CRAWLER_TIMEOUT: float = 15.0
+    CRAWLER_LOCK_TIMEOUT: int = 600
 
     # CORS
     CORS_ORIGINS: list[str] = [

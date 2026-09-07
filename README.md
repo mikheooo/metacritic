@@ -1,8 +1,17 @@
-# Metacritic AI Platform — Foundation (Stage 1)
+# Metacritic AI Platform — Foundation & Ingestion (Stage 2)
 
 Production-like foundation for an AI Engineer test project designed to ingest, process, and analyze game data from Metacritic with automated scheduling, review insights, embedding similarity, and monitoring.
 
-> **Stage 1 Scope**: Core project skeleton, database schema with constraints, migrations, FastAPI endpoints (`/health`, `/ready`, `/api/games`), Celery infrastructure with diagnostic ping task, React + TypeScript + Vite frontend, Docker Compose orchestration, tests, linting, and architecture documentation. Scraping, LLMs, and YouTube analysis are deferred to subsequent stages.
+> **Stage 1 Scope**: Core project skeleton, database schema with constraints, migrations, FastAPI endpoints (`/health`, `/ready`, `/api/games`), Celery infrastructure with diagnostic ping task, React + TypeScript + Vite frontend, Docker Compose orchestration, tests, linting, and architecture documentation.
+>
+> **Stage 2 Scope**: Production-like Metacritic Ingestion Pipeline:
+> - Decoupled HTTP transport (`MetacriticClient`), pure HTML parser (`MetacriticParser`), typed DTOs (`GameCandidate`, `GameDetails`, `PlatformScore`, `BrowsePage`).
+> - Daily calendar cycle: first run of each calendar day uses *Games → New Releases*; subsequent runs progress through *Browse → Newest* (`?page=1, 2, ...`).
+> - Calendar day deduplication invariant: `DailyGameProcessing` with `(processing_date, game_external_id)` unique constraint.
+> - Cursor vs Ledger separation: `DailyCrawlState` is an optimization pointer; `DailyGameProcessing` is the deduplication authority.
+> - Redis distributed lock (`CrawlLock`) preventing overlapping scheduled/manual crawler runs.
+> - Failure isolation: per-game savepoint rollback; failed games remain eligible for subsequent runs.
+> - Developer CLI (`python -m app.cli crawl --limit 20 [--dry-run]`) and Celery task (`tasks.process_metacritic_batch`).
 
 ---
 
@@ -245,15 +254,49 @@ mypy app
 
 ---
 
-## Current Status: Stage 1 COMPLETE
+---
 
-- [x] Full-stack directory structure
-- [x] SQLAlchemy 2.0 models with strict constraints
-- [x] Initial Alembic migration `001_initial_schema`
-- [x] FastAPI `/health`, `/ready`, `/api/games`, `/api/games/{id}`
-- [x] Celery diagnostic `ping` task
-- [x] React 18 / TypeScript / Vite frontend (`/`, `/games/:id`, `/monitor`)
-- [x] Docker Compose multi-service orchestration
-- [x] Automated tests covering DB constraints, API, and daily processing invariant
-- [x] Ruff and mypy configuration and validation
-- [x] Architecture and AI transcript documentation
+## Metacritic Ingestion CLI & Background Tasks
+
+### CLI Usage
+
+The ingestion pipeline can be triggered directly from the CLI for developer inspection and live crawls:
+
+```bash
+# Dry-run mode: inspect candidates without database persistence
+docker compose run --rm backend python -m app.cli crawl --limit 20 --dry-run
+
+# Live persistence mode: fetch, parse, and persist up to 20 eligible games
+docker compose run --rm backend python -m app.cli crawl --limit 20
+
+# Specify custom limit or trigger type
+docker compose run --rm backend python -m app.cli crawl --limit 5 --trigger manual
+```
+
+### Celery Task Entrypoint
+
+Scheduled or asynchronous crawls are dispatched via Celery:
+
+```python
+from app.workers.tasks import process_metacritic_batch
+
+# Async dispatch via worker
+task = process_metacritic_batch.delay(limit=20, trigger_type="scheduled", dry_run=False)
+```
+
+---
+
+## Current Status: Stage 2 COMPLETE
+
+- [x] Full-stack directory structure & container orchestration
+- [x] SQLAlchemy 2.0 models with strict constraints (`DailyGameProcessing`, `DailyCrawlState`, `CrawlRun`)
+- [x] Pure decoupled parser (`MetacriticParser`) with DOM testids & Schema.org JSON-LD extraction
+- [x] Resilient HTTP client (`MetacriticClient`) with rate limiting and exponential backoff
+- [x] Concurrency protection via Redis distributed lock (`CrawlLock`)
+- [x] Calendar day deduplication invariant via `DailyGameProcessing`
+- [x] Cursor vs ledger progression (`DailyCrawlState` pointer vs `DailyGameProcessing` truth)
+- [x] Per-game failure isolation with transaction savepoints
+- [x] Developer CLI (`python -m app.cli crawl`) and Celery worker task (`process_metacritic_batch`)
+- [x] 33 automated tests covering parser, models, API, daily crawler state transitions, and lock contention
+- [x] Controlled live validation verifying live persistence, same-day deduplication, and zero SQL duplicate violations
+- [x] Clean Ruff and mypy validation (0 errors across all 41 source files)

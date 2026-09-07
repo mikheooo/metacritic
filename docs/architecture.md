@@ -68,30 +68,89 @@ This document describes the foundational architecture of the Metacritic Game Ana
 - **SimilarGame**: Similarity edges with a check constraint `game_id != similar_game_id` and unique pair constraint `UniqueConstraint("game_id", "similar_game_id")`.
 - **Crawl Infrastructure**:
   - `CrawlRun`: Audit log of crawl executions (status, trigger_type, timestamps, counts).
-  - `DailyCrawlState`: Cursor state tracking daily crawl phases (`new_releases`, `browse`).
+  - `DailyCrawlState`: Optimization cursor tracking daily crawl phases (`new_releases`, `browse`) and `browse_page`.
   - `DailyGameProcessing`: **Critical project invariant** guaranteeing no game is processed more than once within the same calendar day via `UniqueConstraint("processing_date", "game_external_id")`.
 
 ### 4. Background Infrastructure (Redis + Celery)
 - Celery worker connected to Redis for broker and result storage.
-- Stage 1 provides a diagnostic `tasks.ping` task returning `"pong"` to verify infrastructure readiness.
+- Celery task `tasks.process_metacritic_batch` dispatches batch crawls.
+- Concurrency protection via `CrawlLock` leveraging Redis distributed locking with automatic expiration to prevent overlapping runs.
 
 ---
 
-## Future Ingestion & AI Pipeline Boundaries
+## Stage 2 Metacritic Ingestion Pipeline
+
+```
+                                  [ Scheduler / CLI / Celery ]
+                                                │
+                                                ▼
+                                   [ Redis Lock (CrawlLock) ]
+                                                │
+                 ┌──────────────────────────────┴──────────────────────────────┐
+                 ▼                                                             ▼
+       Phase: "new_releases"                                          Phase: "browse"
+  (First run of calendar day)                                  (Subsequent runs of the day)
+                 │                                                             │
+                 ▼                                                             ▼
+     GET /game/ (New Releases)                                  GET /browse/game/.../?page=N
+                 │                                                             │
+                 └──────────────────────────────┬──────────────────────────────┘
+                                                │
+                                                ▼
+                                    [ MetacriticParser ]
+                             (Extract DTOs, Normalization, testids)
+                                                │
+                                                ▼
+                                   [ Daily Ledger Deduplication ]
+                           (Skip if external_id in DailyGameProcessing)
+                                                │
+                                                ▼
+                                    [ Ingestion Loop (≤20) ]
+                             (Per-Game Atomic Savepoint Isolation)
+                                                │
+                    ┌───────────────────────────┴───────────────────────────┐
+                    ▼                                                       ▼
+            [ Game Details HTML ]                                   [ Network/Parse Error ]
+            GET /game/{slug}/                                               │
+                    │                                                       ▼
+                    ▼                                               Rollback savepoint
+            Upsert Game entity                                      Error logged
+            Upsert Platform & GamePlatform                          Crawl continues!
+            Record DailyGameProcessing                              Game remains eligible
+            Commit savepoint
+```
+
+### Cursor vs. Ledger Semantics
+
+- **`DailyCrawlState` (Optimization Cursor)**:
+  - Tracks `phase` (`new_releases` or `browse`) and `browse_page`.
+  - Determines *where to search next* to avoid re-fetching pages from the start.
+  - Resets automatically at the start of each new calendar day.
+
+- **`DailyGameProcessing` (Deduplication Authority)**:
+  - Stores `(processing_date, game_external_id)`.
+  - Invariant: A game can be processed at most once per calendar day.
+  - Enforced by database `UniqueConstraint("processing_date", "game_external_id")`.
+  - Prevents duplicates even if a game appears on multiple browse pages or in both New Releases and Browse.
+  - If a game fails during ingestion, its record is rolled back, preserving eligibility for subsequent runs.
+
+---
+
+## Future Ingestion & AI Pipeline Boundaries (Stage 3+)
 
 In subsequent stages, the background processing will follow strict pipeline boundaries:
 
 ```
-[1. Source Discovery]
+[1. Source Discovery]  <-- COMPLETED (Stage 2)
       │  Discovers new releases or paginated browse links on Metacritic
       ▼
-[2. Scraping]
+[2. Scraping]          <-- COMPLETED (Stage 2)
       │  Fetches game pages, platform scores, critic reviews, and user reviews
       ▼
-[3. Normalization]
+[3. Normalization]     <-- COMPLETED (Stage 2)
       │  Parses raw HTML/JSON into typed schemas, sanitizes text, validates scores
       ▼
-[4. Persistence & Deduplication]
+[4. Persistence & Deduplication] <-- COMPLETED (Stage 2)
       │  Applies DailyGameProcessing calendar invariant, updates Games and GamePlatforms
       ▼
 [5. Review Analysis (AI / LLM)]
