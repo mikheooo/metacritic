@@ -4,7 +4,12 @@ from app.services.crawler.dtos import (
     extract_canonical_slug,
     normalize_canonical_url,
 )
-from app.services.crawler.parser import MetacriticParser
+from app.services.crawler.parser import (
+    MetacriticParser,
+    is_navigation_or_category_label,
+    normalize_platform_name,
+    normalize_platform_slug,
+)
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "metacritic"
 
@@ -149,3 +154,96 @@ def test_parse_game_missing_scores_fixture() -> None:
     assert details.platforms[0].platform_slug == "pc"
     assert details.platforms[0].metascore is None
     assert details.platforms[0].userscore is None
+
+
+def test_platform_normalization_deterministic() -> None:
+    """Verify deterministic normalization of platform slugs and names."""
+    # Slug normalization
+    assert normalize_platform_slug("ps5") == "playstation-5"
+    assert normalize_platform_slug("PS5") == "playstation-5"
+    assert normalize_platform_slug("playstation-5") == "playstation-5"
+    assert normalize_platform_slug("switch") == "nintendo-switch"
+    assert normalize_platform_slug("nintendo-switch") == "nintendo-switch"
+    assert normalize_platform_slug("nintendo-switch-2") == "nintendo-switch-2"
+    assert normalize_platform_slug("xbox-series-x") == "xbox-series-x"
+    assert normalize_platform_slug("pc") == "pc"
+    assert normalize_platform_slug("PC") == "pc"
+
+    # Name normalization
+    assert normalize_platform_name("ps5", slug="ps5") == "PlayStation 5"
+    assert normalize_platform_name("pc", slug="pc") == "PC"
+    assert normalize_platform_name("PC") == "PC"
+    assert normalize_platform_name("xbox-series-x", slug="xbox-series-x") == "Xbox Series X"
+    assert normalize_platform_name("nintendo-switch-2", slug="nintendo-switch-2") == "Nintendo Switch 2"
+    assert normalize_platform_name("playstation-4", slug="playstation-4") == "PlayStation 4"
+
+
+def test_navigation_category_rejection() -> None:
+    """Verify defensive rejection of navigation, category, and review labels."""
+    bad_labels = [
+        "New PS5 Games",
+        "New PC Games",
+        "New Xbox Series X/S Games",
+        "New Switch/Switch 2 Games",
+        "Best PS5 Games",
+        "Upcoming PC Games",
+        "Games on Switch",
+        "Based on 4 Critic Reviews74",
+        "Based on 1 Critic Reviewtbd",
+        "Browse Games",
+        "View All Games",
+        "See All",
+    ]
+    for label in bad_labels:
+        assert is_navigation_or_category_label(label) is True, f"Expected {label} to be flagged as navigation"
+
+    good_labels = [
+        "PlayStation 5",
+        "PC",
+        "Xbox Series X",
+        "Xbox Series S",
+        "Nintendo Switch",
+        "Nintendo Switch 2",
+        "PlayStation 4",
+        "iOS",
+        "Android",
+    ]
+    for label in good_labels:
+        assert is_navigation_or_category_label(label) is False, f"Expected {label} to NOT be flagged as navigation"
+
+
+def test_parse_game_platform_pollution_regression_fixture() -> None:
+    """Verify parser extracts only real platforms and completely rejects navigation labels."""
+    html = load_fixture("game_platform_pollution_regression.html")
+    details = MetacriticParser.parse_game_details(
+        html, "https://www.metacritic.com/game/cyberpunk-2077/"
+    )
+
+    platform_names = [p.platform_name for p in details.platforms]
+    platform_slugs = [p.platform_slug for p in details.platforms]
+
+    # Expected real platforms
+    assert "PC" in platform_names
+    assert "PlayStation 5" in platform_names
+    assert "Xbox Series X" in platform_names
+
+    assert "pc" in platform_slugs
+    assert "playstation-5" in platform_slugs
+    assert "xbox-series-x" in platform_slugs
+
+    # Verify contaminated navigation labels are NEVER present
+    forbidden_names = [
+        "New PS5 Games",
+        "New PC Games",
+        "New Xbox Series X/S Games",
+        "New Switch/Switch 2 Games",
+        "Best PS5 Games",
+        "Upcoming PC Games",
+        "Upcoming PS5 Games",
+    ]
+    for bad in forbidden_names:
+        assert bad not in platform_names, f"Pollution found: {bad} in {platform_names}"
+
+    # Verify review count strings are not in platform names
+    for name in platform_names:
+        assert not is_navigation_or_category_label(name), f"Invalid platform name: {name}"

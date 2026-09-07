@@ -139,6 +139,12 @@ This document describes the foundational architecture of the Metacritic Game Ana
   - Prevents duplicates even if a game appears on multiple browse pages or in both New Releases and Browse.
   - If a game fails during ingestion, its record is rolled back, preserving eligibility for subsequent runs.
 
+### Platform Extraction Scoping & Quality Protection
+- **DOM Boundary Scoping**: Platform discovery is strictly scoped to semantic game containers (`data-testid="platform-selector"`, `data-testid="all-platforms"`, and `.game-platforms`). Global document `<a>` links (such as header/footer navigation categories) are excluded.
+- **Defensive Navigation & Category Rejection**: Pure function `is_navigation_or_category_label(text)` defensively filters category patterns (`New ... Games`, `Best ... Games`, `Upcoming ... Games`, `Based on ... Reviews`, `Browse ...`), preventing non-platform strings from becoming platforms.
+- **Deterministic Normalization**: Pure functions `normalize_platform_slug` and `normalize_platform_name` map aliases (e.g. `ps5` -> `playstation-5`, `switch` -> `nintendo-switch`) to canonical forms (`PlayStation 5`, `Nintendo Switch`, `Xbox Series X`, `PC`).
+- **Data Cleanup Migration (004)**: Cleaned legacy contaminated rows, re-pointed alias relationships, and safely preserved genuine platform scores.
+
 ---
 
 ## Stage 4 Semantic Embedding & Similarity Pipeline

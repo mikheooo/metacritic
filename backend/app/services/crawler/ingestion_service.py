@@ -18,6 +18,11 @@ from app.services.crawler.dtos import (
     normalize_canonical_url,
 )
 from app.services.crawler.lock import CrawlLock
+from app.services.crawler.parser import (
+    is_navigation_or_category_label,
+    normalize_platform_name,
+    normalize_platform_slug,
+)
 from app.services.crawler.source import MetacriticSource
 
 logger = logging.getLogger(__name__)
@@ -220,14 +225,20 @@ class IngestionService:
 
         # 2. Upsert Platforms & GamePlatform associations
         for p_score in details.platforms:
-            p_slug = p_score.platform_slug.lower()
+            p_slug = normalize_platform_slug(p_score.platform_slug)
+            p_name = normalize_platform_name(p_score.platform_name, slug=p_slug)
+            if is_navigation_or_category_label(p_name):
+                continue
             stmt_p = select(Platform).where(Platform.slug == p_slug)
             res_p = await self.db.execute(stmt_p)
             platform = res_p.scalar_one_or_none()
 
             if not platform:
-                platform = Platform(name=p_score.platform_name, slug=p_slug)
+                platform = Platform(name=p_name, slug=p_slug)
                 self.db.add(platform)
+                await self.db.flush()
+            elif platform.name != p_name and not is_navigation_or_category_label(p_name):
+                platform.name = p_name
                 await self.db.flush()
 
             # Check existing GamePlatform

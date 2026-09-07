@@ -80,23 +80,105 @@ def _parse_score_float(val: str | None) -> float | None:
         return None
 
 
+SLUG_ALIASES: dict[str, str] = {
+    "ps5": "playstation-5",
+    "ps4": "playstation-4",
+    "ps3": "playstation-3",
+    "ps2": "playstation-2",
+    "ps1": "playstation",
+    "playstation-5": "playstation-5",
+    "playstation-4": "playstation-4",
+    "playstation-3": "playstation-3",
+    "playstation-2": "playstation-2",
+    "playstation": "playstation",
+    "xbox-series-x": "xbox-series-x",
+    "xbox-series-s": "xbox-series-s",
+    "xbox-one": "xbox-one",
+    "xbox-360": "xbox-360",
+    "xbox": "xbox",
+    "switch": "nintendo-switch",
+    "nintendo-switch": "nintendo-switch",
+    "switch-2": "nintendo-switch-2",
+    "nintendo-switch-2": "nintendo-switch-2",
+    "pc": "pc",
+    "ios": "ios",
+    "android": "android",
+}
+
+PLATFORM_CANONICAL_NAMES: dict[str, str] = {
+    "pc": "PC",
+    "playstation-5": "PlayStation 5",
+    "playstation-4": "PlayStation 4",
+    "playstation-3": "PlayStation 3",
+    "playstation-2": "PlayStation 2",
+    "playstation": "PlayStation",
+    "xbox-series-x": "Xbox Series X",
+    "xbox-series-s": "Xbox Series S",
+    "xbox-one": "Xbox One",
+    "xbox-360": "Xbox 360",
+    "xbox": "Xbox",
+    "nintendo-switch": "Nintendo Switch",
+    "nintendo-switch-2": "Nintendo Switch 2",
+    "wii-u": "Wii U",
+    "wii": "Wii",
+    "gamecube": "GameCube",
+    "nintendo-64": "Nintendo 64",
+    "3ds": "Nintendo 3DS",
+    "ds": "Nintendo DS",
+    "ios": "iOS",
+    "android": "Android",
+}
+
+NAVIGATION_CATEGORY_PATTERN = re.compile(
+    r"^(new|best|upcoming|top|all|popular|recent|latest)\s+.*games?|"
+    r"^games\s+(on|for|by|in)\s+.*|"
+    r"^based\s+on\s+.*|"
+    r"^browse\b|"
+    r"^view\s+all\b|"
+    r"^see\s+all\b|"
+    r"^read\s+all\b",
+    re.IGNORECASE,
+)
+
+
+def is_navigation_or_category_label(text: str | None) -> bool:
+    """Defensively detect navigation, category, review count, or browse labels."""
+    if not text:
+        return True
+    cleaned = _clean_text(text)
+    if not cleaned:
+        return True
+    return bool(NAVIGATION_CATEGORY_PATTERN.search(cleaned))
+
+
+def normalize_platform_slug(slug: str) -> str:
+    """Normalize a platform slug to its canonical form."""
+    cleaned = re.sub(r"[^a-zA-Z0-9\-]", "", slug.strip().lower().replace(" ", "-").replace("_", "-"))
+    return SLUG_ALIASES.get(cleaned, cleaned)
+
+
+def normalize_platform_name(name: str, slug: str | None = None) -> str:
+    """
+    Normalize platform name to canonical form.
+    If slug is provided, uses canonical mapping for that slug.
+    If name matches a known alias or formatted string, normalizes it.
+    """
+    if slug:
+        norm_slug = normalize_platform_slug(slug)
+        if norm_slug in PLATFORM_CANONICAL_NAMES:
+            return PLATFORM_CANONICAL_NAMES[norm_slug]
+
+    clean_name = _clean_text(name) or ""
+    slug_cand = normalize_platform_slug(clean_name.lower().replace(" ", "-"))
+    if slug_cand in PLATFORM_CANONICAL_NAMES:
+        return PLATFORM_CANONICAL_NAMES[slug_cand]
+
+    return clean_name.title() if clean_name else "Unknown"
+
+
 def _platform_slug_to_name(slug: str) -> str:
     """Format platform slug to a clean human-readable name."""
-    mapping = {
-        "ps5": "PlayStation 5",
-        "playstation-5": "PlayStation 5",
-        "ps4": "PlayStation 4",
-        "playstation-4": "PlayStation 4",
-        "pc": "PC",
-        "xbox-series-x": "Xbox Series X",
-        "xbox-one": "Xbox One",
-        "switch": "Nintendo Switch",
-        "nintendo-switch": "Nintendo Switch",
-        "nintendo-switch-2": "Nintendo Switch 2",
-        "ios": "iOS",
-        "android": "Android",
-    }
-    return mapping.get(slug.lower(), slug.replace("-", " ").title())
+    return normalize_platform_name(slug, slug=slug)
 
 
 class MetacriticParser:
@@ -335,21 +417,42 @@ class MetacriticParser:
             userscore=userscore,
         )
 
-        # Discover additional platforms from platform links (e.g. /critic-reviews/?platform=...)
-        for a in soup.find_all("a", href=re.compile(r"platform=([a-zA-Z0-9\-]+)")):
-            href = _get_attr(a, "href") or ""
-            match = re.search(r"platform=([a-zA-Z0-9\-]+)", href)
-            if not match:
-                continue
-            p_slug = match.group(1).lower()
-            p_name = _clean_text(a.get_text()) or _platform_slug_to_name(p_slug)
-            if p_slug not in platforms_dict:
-                platforms_dict[p_slug] = PlatformScore(
-                    platform_name=p_name,
-                    platform_slug=p_slug,
-                    metascore=None,
-                    userscore=None,
-                )
+        # Discover additional platforms strictly within game platform containers
+        platform_containers = []
+        if selector_elem:
+            platform_containers.append(selector_elem)
+        all_platforms_elem = _find_by_testid(soup, "all-platforms")
+        if all_platforms_elem:
+            platform_containers.append(all_platforms_elem)
+        for class_pat in ("c-gameDetails_Platforms", "c-gamePlatforms", "game-platforms"):
+            for elem in soup.find_all(class_=re.compile(class_pat, re.I)):
+                if elem not in platform_containers:
+                    platform_containers.append(elem)
+
+        for container in platform_containers:
+            for a in container.find_all("a", href=re.compile(r"platform=([a-zA-Z0-9\-]+)")):
+                href = _get_attr(a, "href") or ""
+                if "/browse/" in href or "/search/" in href:
+                    continue
+                match = re.search(r"platform=([a-zA-Z0-9\-]+)", href)
+                if not match:
+                    continue
+                raw_slug = match.group(1).lower()
+                p_slug = normalize_platform_slug(raw_slug)
+
+                link_text = _clean_text(a.get_text())
+                if link_text and not is_navigation_or_category_label(link_text):
+                    p_name = normalize_platform_name(link_text, slug=p_slug)
+                else:
+                    p_name = normalize_platform_name(p_slug, slug=p_slug)
+
+                if p_slug not in platforms_dict:
+                    platforms_dict[p_slug] = PlatformScore(
+                        platform_name=p_name,
+                        platform_slug=p_slug,
+                        metascore=None,
+                        userscore=None,
+                    )
 
         return GameDetails(
             external_id=slug,

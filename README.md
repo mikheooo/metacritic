@@ -380,7 +380,8 @@ sim_task = rebuild_similar_games.delay()
 - [x] Celery background tasks (`tasks.embed_game`, `tasks.embed_all_games`, `tasks.rebuild_similar_games`) and CLI (`python -m app.cli embed`, `python -m app.cli similarity`)
 - [x] REST API `GET /api/games/{id}` returns `similar_games` array; raw embeddings never exposed
 - [x] Frontend UI on `/games/:id` renders interactive Similar Games card grid with similarity score match badges and seamless routing
-- [x] 76 automated tests covering parser, models, API, daily crawler state transitions, sampling, fingerprinting, provider failure, embedding validation, synthetic vector ranking, and similarity constraints
+- [x] Platform data quality fix: scoped DOM crawler parsing, deterministic normalization, defensive navigation/category label rejection (`is_navigation_or_category_label`), and transactional Alembic migration 004 preserving genuine scores
+- [x] 79 automated tests covering parser, platform quality regression, models, API, daily crawler state transitions, sampling, fingerprinting, provider failure, embedding validation, synthetic vector ranking, and similarity constraints
 - [x] Controlled live validation: all 11 games embedded via OpenRouter (`openai/text-embedding-3-small`), second unchanged run skips 100%, similarity rebuilt, SQL duplicate/self-reference audits clean
 - [x] Clean Ruff (0 lint errors) and mypy (0 type errors across 52 source files) validation
 

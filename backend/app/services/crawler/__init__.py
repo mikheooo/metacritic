@@ -9,7 +9,12 @@ from app.services.crawler.dtos import (
 )
 from app.services.crawler.ingestion_service import IngestionResult, IngestionService
 from app.services.crawler.lock import CrawlAlreadyRunningError, CrawlLock
-from app.services.crawler.parser import MetacriticParser
+from app.services.crawler.parser import (
+    MetacriticParser,
+    is_navigation_or_category_label,
+    normalize_platform_name,
+    normalize_platform_slug,
+)
 from app.services.crawler.source import MetacriticSource
 
 __all__ = [
@@ -21,6 +26,9 @@ __all__ = [
     "extract_canonical_slug",
     "MetacriticSource",
     "MetacriticParser",
+    "normalize_platform_name",
+    "normalize_platform_slug",
+    "is_navigation_or_category_label",
     "MetacriticClient",
     "CrawlLock",
     "CrawlAlreadyRunningError",

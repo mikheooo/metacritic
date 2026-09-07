@@ -75,6 +75,8 @@ export const GamesPage: React.FC = () => {
             <option value="playstation-5">PlayStation 5</option>
             <option value="xbox-series-x">Xbox Series X</option>
             <option value="nintendo-switch">Nintendo Switch</option>
+            <option value="nintendo-switch-2">Nintendo Switch 2</option>
+            <option value="playstation-4">PlayStation 4</option>
           </select>
         </div>
 
