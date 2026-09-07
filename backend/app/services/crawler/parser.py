@@ -130,6 +130,7 @@ PLATFORM_CANONICAL_NAMES: dict[str, str] = {
 }
 
 NAVIGATION_CATEGORY_PATTERN = re.compile(
+    r"^games?$|"
     r"^(new|best|upcoming|top|all|popular|recent|latest)\s+.*games?|"
     r"^games\s+(on|for|by|in)\s+.*|"
     r"^based\s+on\s+.*|"

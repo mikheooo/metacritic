@@ -46,6 +46,10 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - ENVIRONMENT=development
       - DEBUG=true
+      - CRAWL_SCHEDULE_ENABLED=true
+      - CRAWL_BATCH_LIMIT=20
+      - CELERY_TIMEZONE=UTC
+      - CRAWL_SCHEDULE_MINUTE=0
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
@@ -76,7 +80,10 @@ services:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/metacritic
       - DATABASE_SYNC_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/metacritic
       - REDIS_URL=redis://redis:6379/0
-      - ENVIRONMENT=development
+      - CRAWL_SCHEDULE_ENABLED=true
+      - CRAWL_BATCH_LIMIT=20
+      - CELERY_TIMEZONE=UTC
+      - CRAWL_SCHEDULE_MINUTE=0
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
@@ -84,7 +91,38 @@ services:
       - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
       - LLM_MODEL=${LLM_MODEL:-openai/gpt-4o-mini}
 
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
 
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: metacritic-celery-beat
+    restart: unless-stopped
+    volumes:
+      - ./backend:/app
+    command: celery -A app.workers.celery_app beat -l info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/metacritic
+      - DATABASE_SYNC_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/metacritic
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+      - CRAWL_SCHEDULE_ENABLED=true
+      - CRAWL_BATCH_LIMIT=20
+      - CELERY_TIMEZONE=UTC
+      - CRAWL_SCHEDULE_MINUTE=0
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
+      - LLM_MODEL=${LLM_MODEL:-openai/gpt-4o-mini}
     depends_on:
       postgres:
         condition: service_healthy

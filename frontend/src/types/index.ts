@@ -94,3 +94,83 @@ export interface ReadyStatus {
   database: string;
   error?: string | null;
 }
+
+export type PipelineStage =
+  | 'queued'
+  | 'discovering'
+  | 'ingesting'
+  | 'reviews'
+  | 'summarizing'
+  | 'embedding'
+  | 'similarity'
+  | 'completed'
+  | 'partial'
+  | 'failed';
+
+export type CrawlRunStatus = 'pending' | 'running' | 'completed' | 'partial' | 'failed';
+
+export interface CrawlRunEvent {
+  id: number;
+  crawl_run_id: number;
+  event_type: string;
+  stage: string;
+  game_id: number | null;
+  message: string;
+  payload: Record<string, any> | null;
+  created_at: string;
+}
+
+export interface CrawlRun {
+  id: number;
+  task_id: string | null;
+  status: CrawlRunStatus;
+  trigger_type: 'scheduled' | 'manual';
+  target_count: number;
+  discovered_count: number;
+  processed_count: number;
+  failed_count: number;
+  reviews_processed_count: number;
+  summaries_generated_count: number;
+  embeddings_generated_count: number;
+  current_stage: PipelineStage | null;
+  current_game_id: number | null;
+  current_game_title: string | null;
+  started_at: string | null;
+  heartbeat_at: string | null;
+  finished_at: string | null;
+  error_summary: string | null;
+  created_at: string;
+  events?: CrawlRunEvent[];
+}
+
+export interface SchedulerStatus {
+  enabled: boolean;
+  timezone: string;
+  next_run_at: string | null;
+  last_run_at: string | null;
+}
+
+export interface WorkerStatus {
+  online: boolean;
+  workers: string[];
+}
+
+export interface MonitorStatus {
+  scheduler: SchedulerStatus;
+  worker: WorkerStatus;
+  active_run: CrawlRun | null;
+  last_run: CrawlRun | null;
+}
+
+export interface PlatformItem {
+  name: string;
+  slug: string;
+}
+
+export interface RunNowResponse {
+  run_id: number;
+  task_id: string | null;
+  status: string;
+  trigger_type: string;
+}
+

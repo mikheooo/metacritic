@@ -40,6 +40,55 @@ def ping() -> str:
     return "pong"
 
 
+@celery_app.task(bind=True, name="tasks.process_metacritic_pipeline")
+def process_metacritic_pipeline(
+    self: Any,
+    limit: int = 20,
+    trigger_type: str = "scheduled",
+    run_id: int | None = None,
+) -> dict[str, Any]:
+    """
+    Canonical Celery task for Metacritic end-to-end processing pipeline.
+    Orchestrates candidate discovery, game ingestion, reviews enrichment,
+    AI summaries, semantic embeddings, and similarity cache rebuilding.
+    Used by both Celery Beat hourly scheduler and manual 'Run Now' trigger.
+    """
+    task_id = getattr(self.request, "id", None) if hasattr(self, "request") else None
+    logger.info(
+        "Executing tasks.process_metacritic_pipeline (task_id=%s, limit=%d, trigger=%s, run_id=%s)",
+        task_id,
+        limit,
+        trigger_type,
+        run_id,
+    )
+
+    async def _execute() -> dict[str, Any]:
+        from app.services.crawler.pipeline_service import MetacriticPipelineService
+
+        async with AsyncSessionLocal() as db_session:
+            service = MetacriticPipelineService(db=db_session)
+            res = await service.run_pipeline(
+                limit=limit,
+                trigger_type=trigger_type,
+                run_id=run_id,
+                task_id=task_id,
+            )
+            return {
+                "crawl_run_id": res.crawl_run_id,
+                "status": res.status,
+                "stage": res.stage,
+                "discovered_count": res.discovered_count,
+                "processed_count": res.processed_count,
+                "failed_count": res.failed_count,
+                "reviews_processed_count": res.reviews_processed_count,
+                "summaries_generated_count": res.summaries_generated_count,
+                "embeddings_generated_count": res.embeddings_generated_count,
+                "errors": res.errors,
+            }
+
+    return _run_async_safely(_execute())
+
+
 @celery_app.task(name="tasks.process_metacritic_batch")
 def process_metacritic_batch(
     limit: int = 20,

@@ -189,3 +189,80 @@ This document describes the foundational architecture of the Metacritic Game Ana
 
 - For current catalog scale (hundreds to thousands of games), executing `rebuild_all` recalculates top-K recommendations for all games in sub-second time directly in PostgreSQL leveraging the HNSW vector index.
 - For enterprise scale (millions of games), full recomputation would be replaced with an event-driven incremental update where a newly embedded game updates its own top-K and triggers reverse-neighborhood checks on approximate candidate clusters.
+
+---
+
+## Stage 5 Hourly Scheduler, Run Now & Realtime Monitoring
+
+```
++-----------------------------------------------------------------------------------------+
+|                                Celery Beat Scheduler                                    |
+|   Single container instance (celery-beat) running hourly crontab(minute=0, hour="*")   |
++--------------------------------------------+--------------------------------------------+
+                                             |
+                                             | Dispatches hourly task
+                                             v
++-----------------------------------------------------------------------------------------+
+|                                    Celery Worker                                        |
+|                          tasks.process_metacritic_pipeline                              |
++--------------------------------------------+--------------------------------------------+
+                                             ^
+                                             | Dispatches manual task (Run Now)
++--------------------------------------------+--------------------------------------------+
+|                            FastAPI Manual Trigger (/crawler/run)                        |
+|   Checks DB pending/running + Redis distributed lock (CrawlLock) -> 409 Conflict        |
++--------------------------------------------+--------------------------------------------+
+                                             |
+                                             v
++-----------------------------------------------------------------------------------------+
+|                           MetacriticPipelineService (Unified)                           |
+|  - Manages stage transitions: queued -> discovering -> ingesting -> reviews ->          |
+|    summaries -> embedding -> similarity -> completed                                    |
+|  - Enforces Stage 2 daily calendar cycle: New Releases on first run; Browse afterward   |
+|  - Deduplicates via DailyGameProcessing (processing_date, game_external_id)             |
+|  - Per-game failure isolation: downstream AI failure never rolls back game entity       |
+|  - Rebuilds similarity cache once at the end of the batch                               |
++--------------------------------------------+--------------------------------------------+
+                                             |
+                                             | Publishes append-only audit events
+                                             v
++-----------------------------------------------------------------------------------------+
+|                           PostgreSQL Audit & State Tables                               |
+|   crawl_runs (metadata, stage, progress counters, heartbeat, error summary)             |
+|   crawl_run_events (id, crawl_run_id, stage, event_type, message, payload, created_at)  |
++--------------------------------------------+--------------------------------------------+
+                                             ^
+                                             | Polled / Streamed via SSE
++--------------------------------------------+--------------------------------------------+
+|                             Realtime Monitoring API & SSE                               |
+|   GET /api/monitor/status      -> Snapshot of scheduler, worker ping, active run        |
+|   GET /api/monitor/runs        -> Durable run history                                   |
+|   GET /api/monitor/runs/{id}   -> Detailed run view with chronological event log        |
+|   GET /api/monitor/stream      -> SSE stream with Last-Event-ID reconnection cursor     |
+|   GET /api/platforms           -> Dynamic clean platforms list from DB                  |
++--------------------------------------------+--------------------------------------------+
+                                             ^
+                                             | EventSource / REST fetch
++--------------------------------------------+--------------------------------------------+
+|                             React Frontend Dashboard (/monitor)                         |
+|   - Realtime system status cards (Scheduler, Worker Ping, Run Now action)               |
+|   - Active run monitor with progress bar, stage indicator, and real-time counters       |
+|   - Live SSE event timeline terminal                                                    |
+|   - Historical crawl run log table with expandable event details                        |
++-----------------------------------------------------------------------------------------+
+```
+
+### Key Architectural Invariants of Stage 5
+
+1. **Single Scheduler Instance**: Docker Compose defines exactly one `celery-beat` service to prevent duplicate task dispatches.
+2. **Deterministic Equivalence**: Scheduled hourly runs and manual `Run Now` invocations invoke the exact same orchestrator (`MetacriticPipelineService`), ensuring consistent cursor advancement, daily deduplication, and database logging.
+3. **Dual Concurrency Guard**:
+   - Application-level check for active (`pending` or `running`) runs in PostgreSQL.
+   - Distributed lock in Redis (`metacritic:crawl_run:lock`) with 3600-second TTL.
+   - Concurrent requests receive an immediate `HTTP 409 Conflict` containing the active `run_id`.
+4. **Resilient Streaming with Durable Cursors**:
+   - `/api/monitor/stream` transmits an initial snapshot followed by new append-only events.
+   - Disconnected clients automatically reconnect using the standard `Last-Event-ID` header or query parameter to resume receiving events without loss or duplication.
+5. **Dynamic Platform Discovery**:
+   - Platforms on `/games` are dynamically fetched from `GET /api/platforms` based on normalized platforms populated by the ingestion pipeline.
+

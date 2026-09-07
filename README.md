@@ -1,4 +1,4 @@
-# Metacritic AI Platform — Reviews Ingestion & AI Summaries (Stage 3)
+# Metacritic AI Platform — Hourly Scheduler, Run Now & Realtime Monitoring (Stage 5)
 
 Production-like platform designed to ingest, process, and analyze game data from Metacritic with automated scheduling, AI review insights, embedding similarity, and monitoring.
 
@@ -23,6 +23,23 @@ Production-like platform designed to ingest, process, and analyze game data from
 > - Database schema: Alembic migration 002 adding `game_review_summaries` table and review enrichment columns (`platform_id`, `source_url`, `content_hash`).
 > - Background Celery tasks (`tasks.enrich_game_reviews`, `tasks.summarize_game_reviews`) and CLI (`python -m app.cli enrich`).
 > - Frontend UI on `/games/:id`: visually distinct **"Critics say"** and **"Players say"** consensus cards with 3 likes, 3 dislikes, review counts, and tabbed review explorer.
+>
+> **Stage 4 Scope**: Semantic Embeddings, pgvector & Similar Games:
+> - Canonical representation (`build_game_embedding_text`) deterministically constructed from title, developer, sorted platforms, description, and AI review summaries.
+> - Cost-control fingerprinting (`compute_embedding_fingerprint`): skips expensive embedding API calls when input text is unchanged.
+> - Vector storage & indexing: PostgreSQL 16 + pgvector (`VECTOR(1536)`) with HNSW cosine distance indexing (`ix_game_embeddings_vector`).
+> - Recommendation engine (`SimilarGamesService`): native pgvector cosine similarity ranking (`1.0 - (embedding <=> target)`), self-exclusion invariant, atomic recommendation replacement (`similar_games` cache).
+> - Frontend UI: interactive Similar Games card grid on `/games/:id` with match percentage indicators.
+>
+> **Stage 5 Scope**: Hourly Scheduler, Run Now & Realtime Monitoring:
+> - Hourly Celery Beat scheduler with UTC crontab (`crontab(minute=0, hour="*")`) running in a dedicated single Beat container (`celery-beat`).
+> - Unified application orchestrator (`MetacriticPipelineService`) for both scheduled and manual invocations, preserving daily New Releases vs Browse cursor semantics (`DailyCrawlState` and `DailyGameProcessing` invariants).
+> - Concurrency protection: Redis distributed lock (`CrawlLock`) + DB active run check returning HTTP 409 Conflict if active.
+> - Schema evolution: Alembic migration `005_crawl_runs_evolution_and_events.py` adding rich `crawl_runs` metadata and append-only `crawl_run_events` audit table indexed by `(crawl_run_id, id)`.
+> - Realtime monitoring API: `GET /api/monitor/status`, `GET /api/monitor/runs`, `GET /api/monitor/runs/{id}`, `GET /api/monitor/stream` (SSE with `Last-Event-ID` cursor reconnection).
+> - Realtime frontend UI (`/monitor`): scheduler status, Celery worker reachability, Run Now trigger, active run progress bar, counters, live SSE event stream timeline, and durable run history.
+> - Dynamic platform filter: `GET /api/platforms` replacing hardcoded platform choices in `GamesPage.tsx`.
+
 
 
 ---
@@ -335,54 +352,61 @@ sim_task = rebuild_similar_games.delay()
 
 ---
 
-## Current Status: Stage 4 COMPLETE (Embeddings, pgvector & Similar Games Verified)
+## Current Status: Stage 5 COMPLETE (Hourly Scheduler, Run Now & Realtime Monitoring)
 
-### Semantic Embeddings & pgvector Pipeline
+### Pipeline Orchestration & Monitoring Architecture
 
-- **Canonical Representation (`build_game_embedding_text`)**:
-  - Deterministically constructs embedding input from Title, Developer, Platforms (alphabetically sorted), Description, Critic summary, and Player summary.
-  - Excludes dynamic metrics (Metascore, Userscore, IDs, timestamps, URLs, tokens) so that scores do not skew semantic similarity. Never outputs literal `"None"`.
-- **SHA-256 Fingerprint Cost Control (`compute_embedding_fingerprint`)**:
-  - Binds canonical text, provider (`openrouter`), model (`openai/text-embedding-3-small`), dimensions (`1536`), and input version (`v1`).
-  - Idempotent: identical fingerprint skips remote embedding API calls (`status="skipped_unchanged"`), incurring zero token cost.
-- **pgvector & HNSW Indexing (`game_embeddings`)**:
-  - Persisted in PostgreSQL using official `pgvector.sqlalchemy.Vector(1536)` in dedicated `game_embeddings` table.
-  - Accelerated via HNSW index: `CREATE INDEX ix_game_embeddings_vector ON game_embeddings USING hnsw (embedding vector_cosine_ops)`.
-- **Cosine Similarity Engine (`SimilarGamesService`)**:
-  - Executes native PostgreSQL pgvector cosine distance queries:
-    ```sql
-    SELECT game_id, (1.0 - (embedding <=> :target_vector)) AS similarity_score
-    FROM game_embeddings
-    WHERE game_id != :source_game_id
-    ORDER BY embedding <=> :target_vector ASC
-    LIMIT 5;
-    ```
-  - Invariants: never recommends self, excludes unembedded games, enforces atomic per-game replacement in `similar_games` recommendation cache.
-- **Frontend Interaction**:
-  - Game Detail view (`/games/:id`) includes interactive **Similar Games** card grid rendering cover images, titles, platform badges, and similarity match percentage indicators.
-  - Clicking any card seamlessly navigates to `/games/:similar_game_id` and reloads full game details.
+- **Unified Application Orchestrator (`MetacriticPipelineService`)**:
+  - Handles both automated Celery Beat hourly runs and manual `/api/crawler/run` (Run Now) triggers through a single deterministic service.
+  - Maintains Stage 2 daily calendar cycle: first run of each UTC calendar day starts with *Games → New Releases*; subsequent runs advance the persistent *Browse → Newest* cursor.
+  - Deduplication invariant: `DailyGameProcessing` with `(processing_date, game_external_id)` unique constraint prevents duplicate processing within the same calendar day.
+  - Granular stage transitions: `queued` → `discovering` → `ingesting` → `reviews` → `summaries` → `embedding` → `similarity` → `completed`.
+  - Resilience: per-game failure isolation ensures downstream review/summary/embedding failures never rollback the game record.
+  - Single similarity rebuild: `rebuild_similar_games` runs once at the end of the batch across all embedded games.
 
-### Checklist
-- [x] Full-stack directory structure & container orchestration
-- [x] SQLAlchemy 2.0 models with strict constraints (`DailyGameProcessing`, `DailyCrawlState`, `CrawlRun`, `Review`, `GameReviewSummary`, `GameEmbedding`, `SimilarGame`)
-- [x] Pure decoupled parser (`MetacriticParser`) with critic/user review extraction and HTML test fixtures
-- [x] Resilient HTTP client (`MetacriticClient`) with rate limiting and exponential backoff
-- [x] Concurrency protection via Redis distributed lock (`CrawlLock`)
-- [x] Calendar day deduplication invariant via `DailyGameProcessing`
-- [x] Cursor vs ledger progression (`DailyCrawlState` pointer vs `DailyGameProcessing` truth)
-- [x] Deterministic review sampling & LLM structured summaries (OpenRouter + OpenAI compatible)
-- [x] Alembic migration 003: pgvector extension, `game_embeddings` table with `VECTOR(1536)`, HNSW cosine index, `similar_games` algorithm version, legacy `games.embedding` dropped
-- [x] Embedding provider abstraction (`EmbeddingProvider` protocol, `OpenRouterEmbeddingProvider`, `FakeEmbeddingProvider`)
-- [x] Deterministic canonical embedding input builder (`build_game_embedding_text`) and SHA-256 fingerprinting
-- [x] Cost-control invariant: identical fingerprint skips embedding API calls (`skipped_unchanged`)
-- [x] Vector validation: rejects wrong dimensions, NaN, Infinity, and empty vectors
-- [x] PostgreSQL pgvector cosine similarity computation and atomic recommendation cache materialization (`similar_games`)
-- [x] Celery background tasks (`tasks.embed_game`, `tasks.embed_all_games`, `tasks.rebuild_similar_games`) and CLI (`python -m app.cli embed`, `python -m app.cli similarity`)
-- [x] REST API `GET /api/games/{id}` returns `similar_games` array; raw embeddings never exposed
-- [x] Frontend UI on `/games/:id` renders interactive Similar Games card grid with similarity score match badges and seamless routing
-- [x] Platform data quality fix: scoped DOM crawler parsing, deterministic normalization, defensive navigation/category label rejection (`is_navigation_or_category_label`), and transactional Alembic migration 004 preserving genuine scores
-- [x] 79 automated tests covering parser, platform quality regression, models, API, daily crawler state transitions, sampling, fingerprinting, provider failure, embedding validation, synthetic vector ranking, and similarity constraints
-- [x] Controlled live validation: all 11 games embedded via OpenRouter (`openai/text-embedding-3-small`), second unchanged run skips 100%, similarity rebuilt, SQL duplicate/self-reference audits clean
-- [x] Clean Ruff (0 lint errors) and mypy (0 type errors across 52 source files) validation
+- **Hourly Scheduling (`celery-beat`)**:
+  - Celery Beat scheduler configured with `crontab(minute=0, hour="*")` in UTC.
+  - Exactly one Celery Beat instance running in Docker Compose (`celery-beat`) to guarantee no duplicate job dispatch.
+  - Production batch default: `limit=20` games per run.
+
+- **Concurrency Protection**:
+  - Dual protection: Redis distributed lock (`metacritic:crawl_run:lock`) with 1-hour TTL + database active run check (`pending` / `running`).
+  - Concurrent manual `Run Now` requests while a run is active return immediate HTTP 409 Conflict with `active_run_id` without polluting the database.
+
+- **Schema Evolution & Audit Log (`Alembic 005`)**:
+  - `crawl_runs` table extended with: `task_id`, `target_count`, `discovered_count`, `processed_count`, `failed_count`, `reviews_processed_count`, `summaries_generated_count`, `embeddings_generated_count`, `current_stage`, `current_game_id`, `current_game_title`, `started_at`, `heartbeat_at`, `finished_at`, `error_summary`.
+  - Append-only `crawl_run_events` table with compound index `ix_crawl_run_events_run_id` on `(crawl_run_id, id)` capturing sanitized event payloads.
+
+- **Realtime Monitoring API & SSE**:
+  - `GET /api/monitor/status`: Scheduler config, worker reachability ping, active run snapshot, and last completed/failed run.
+  - `GET /api/monitor/runs`: Durable, paginated history of crawl runs with event lists.
+  - `GET /api/monitor/runs/{id}`: Detailed view of a specific run with chronological event timeline.
+  - `GET /api/monitor/stream`: Realtime Server-Sent Events (SSE) streaming snapshot, append-only events, and reconnection cursor support via `Last-Event-ID`.
+  - `GET /api/platforms`: Dynamic, distinct, normalized platforms from the database.
+
+- **Realtime Frontend UI (`/monitor`)**:
+  - Responsive dark-theme dashboard matching the Metacritic AI design language.
+  - Status cards: Scheduler state & countdown, Celery Worker reachability (online/offline with worker name), Run Now button with loading state.
+  - Active Run Monitor: Stage pill badge, progress bar, counters (Discovered, Games, Reviews, Summaries, Embeddings, Errors), current game title.
+  - Live SSE Event Stream Timeline: Scrollable terminal-styled timeline with timestamp, stage badge, event name, and details.
+  - Run History: Paginated table of past runs with status badges, trigger types, durations, processed/target counters, and expandable event drawers.
+  - Dynamic platform filter on `/games` loaded from `GET /api/platforms`.
+
+### Stage 5 Checklist
+- [x] Celery Beat hourly crontab (`crontab(minute=0, hour="*")`) in UTC
+- [x] Dedicated single Beat instance in `docker-compose.yml` (`celery-beat`)
+- [x] Unified application orchestrator (`MetacriticPipelineService`) for scheduled & manual runs
+- [x] Calendar day deduplication preserved via `DailyGameProcessing` and `DailyCrawlState`
+- [x] Concurrency protection via Redis lock (`CrawlLock`) returning HTTP 409 Conflict
+- [x] Alembic migration `005_crawl_runs_evolution_and_events.py` applied and tested
+- [x] Append-only `crawl_run_events` table with compound index on `(crawl_run_id, id)`
+- [x] Realtime monitoring REST endpoints (`GET /api/monitor/status`, `runs`, `runs/{id}`)
+- [x] Realtime Server-Sent Events (`GET /api/monitor/stream`) with `Last-Event-ID` reconnection cursor
+- [x] Dynamic platform endpoint (`GET /api/platforms`) integrated into `GamesPage.tsx`
+- [x] Realtime frontend UI (`/monitor`) with status cards, Run Now, active progress, SSE timeline, and run history
+- [x] 96 automated tests passing (scheduler, concurrency, pipeline service, monitor API, SSE stream)
+- [x] Live end-to-end controlled run verification in Docker Compose (17 events captured, 2 games ingested & embedded, similarity rebuilt, 0 duplicate daily ledger entries)
+- [x] Clean Ruff (0 lint errors) and mypy (0 type errors across 57 source files) validation
+
 
 

@@ -1,7 +1,18 @@
 from datetime import UTC, date, datetime
-from typing import Optional
+from typing import Any, Optional
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -12,12 +23,32 @@ class CrawlRun(Base):
     __tablename__ = "crawl_runs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
-    status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)  # pending, running, completed, failed
+    task_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)  # pending, running, completed, partial, failed
     trigger_type: Mapped[str] = mapped_column(String(50), default="manual", nullable=False)  # scheduled, manual
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    target_count: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    discovered_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     processed_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     failed_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    reviews_processed_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    summaries_generated_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    embeddings_generated_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    current_stage: Mapped[str | None] = mapped_column(String(50), nullable=True)  # queued, discovering, ingesting, reviews, summarizing, embedding, similarity, completed, partial, failed
+    current_game_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("games.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    current_game_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -30,6 +61,47 @@ class CrawlRun(Base):
         "DailyGameProcessing",
         back_populates="crawl_run",
     )
+    events: Mapped[list["CrawlRunEvent"]] = relationship(
+        "CrawlRunEvent",
+        back_populates="crawl_run",
+        cascade="all, delete-orphan",
+        order_by="CrawlRunEvent.id",
+    )
+
+
+class CrawlRunEvent(Base):
+    __tablename__ = "crawl_run_events"
+    __table_args__ = (
+        Index("ix_crawl_run_events_run_id_id", "crawl_run_id", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
+    crawl_run_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("crawl_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    stage: Mapped[str] = mapped_column(String(50), nullable=False)
+    game_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("games.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON().with_variant(postgresql.JSONB(), "postgresql"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    crawl_run: Mapped["CrawlRun"] = relationship("CrawlRun", back_populates="events")
 
 
 class DailyCrawlState(Base):

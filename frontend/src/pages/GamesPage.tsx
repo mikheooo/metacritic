@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { fetchGames } from '../api/client';
-import { Game } from '../types';
+import { fetchGames, fetchPlatforms } from '../api/client';
+import { Game, PlatformItem } from '../types';
 import { GameCard } from '../components/GameCard';
 
 export const GamesPage: React.FC = () => {
@@ -8,6 +8,9 @@ export const GamesPage: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Available dynamic platforms from database
+  const [availablePlatforms, setAvailablePlatforms] = useState<PlatformItem[]>([]);
 
   // Filters & Sorting state
   const [searchQuery, setSearchQuery] = useState('');
@@ -34,6 +37,12 @@ export const GamesPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchPlatforms()
+      .then((data) => setAvailablePlatforms(data))
+      .catch((err) => console.warn('Failed to fetch platforms:', err));
+  }, []);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -63,7 +72,7 @@ export const GamesPage: React.FC = () => {
           />
         </div>
 
-        {/* Platform filter placeholder */}
+        {/* Dynamic Platform filter */}
         <div className="filter-group">
           <select
             className="select-control"
@@ -71,12 +80,11 @@ export const GamesPage: React.FC = () => {
             onChange={(e) => setPlatform(e.target.value)}
           >
             <option value="">All Platforms</option>
-            <option value="pc">PC</option>
-            <option value="playstation-5">PlayStation 5</option>
-            <option value="xbox-series-x">Xbox Series X</option>
-            <option value="nintendo-switch">Nintendo Switch</option>
-            <option value="nintendo-switch-2">Nintendo Switch 2</option>
-            <option value="playstation-4">PlayStation 4</option>
+            {availablePlatforms.map((p) => (
+              <option key={p.slug} value={p.slug}>
+                {p.name}
+              </option>
+            ))}
           </select>
         </div>
 

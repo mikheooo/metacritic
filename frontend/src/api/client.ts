@@ -1,4 +1,13 @@
-import { GameDetail, GameListResponse, HealthStatus, ReadyStatus } from '../types';
+import {
+  CrawlRun,
+  GameDetail,
+  GameListResponse,
+  HealthStatus,
+  MonitorStatus,
+  PlatformItem,
+  ReadyStatus,
+  RunNowResponse,
+} from '../types';
 
 const API_BASE = '/api';
 
@@ -50,3 +59,59 @@ export async function fetchReady(): Promise<ReadyStatus> {
   const res = await fetch('/ready');
   return res.json();
 }
+
+export async function fetchPlatforms(): Promise<PlatformItem[]> {
+  const res = await fetch(`${API_BASE}/platforms`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch platforms: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchMonitorStatus(): Promise<MonitorStatus> {
+  const res = await fetch(`${API_BASE}/monitor/status`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch monitor status: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchMonitorRuns(limit = 20, offset = 0): Promise<CrawlRun[]> {
+  const res = await fetch(`${API_BASE}/monitor/runs?limit=${limit}&offset=${offset}`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch monitor runs: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchMonitorRun(runId: number): Promise<CrawlRun> {
+  const res = await fetch(`${API_BASE}/monitor/runs/${runId}`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch monitor run #${runId}: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function triggerRunNow(limit = 20): Promise<RunNowResponse> {
+  const res = await fetch(`${API_BASE}/crawler/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ limit }),
+  });
+
+  if (res.status === 409) {
+    const data = await res.json().catch(() => ({}));
+    const err = new Error(data.detail || 'A Metacritic processing run is already active');
+    (err as any).status = 409;
+    (err as any).active_run_id = data.active_run_id;
+    throw err;
+  }
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Failed to trigger crawl run: ${res.status}`);
+  }
+
+  return res.json();
+}
+

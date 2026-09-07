@@ -20,9 +20,15 @@ class Settings(BaseSettings):
     # Crawler Settings
     METACRITIC_BASE_URL: str = "https://www.metacritic.com"
     CRAWLER_BATCH_LIMIT: int = 20
+    CRAWL_BATCH_LIMIT: int = 20
     CRAWLER_RATE_LIMIT_DELAY: float = 0.5
     CRAWLER_TIMEOUT: float = 15.0
     CRAWLER_LOCK_TIMEOUT: int = 600
+
+    # Scheduler & Celery Settings
+    CRAWL_SCHEDULE_ENABLED: bool = True
+    CELERY_TIMEZONE: str = "UTC"
+    CRAWL_SCHEDULE_MINUTE: int = 0
 
     # Review Ingestion & Sampling Settings
     CRITIC_REVIEW_MAX_ITEMS: int = 50

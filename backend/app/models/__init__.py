@@ -1,5 +1,5 @@
 from app.db.base import Base
-from app.models.crawl import CrawlRun, DailyCrawlState, DailyGameProcessing
+from app.models.crawl import CrawlRun, CrawlRunEvent, DailyCrawlState, DailyGameProcessing
 from app.models.embedding import GameEmbedding
 from app.models.game import Game
 from app.models.platform import GamePlatform, Platform
@@ -17,6 +17,7 @@ __all__ = [
     "GameEmbedding",
     "SimilarGame",
     "CrawlRun",
+    "CrawlRunEvent",
     "DailyCrawlState",
     "DailyGameProcessing",
 ]
