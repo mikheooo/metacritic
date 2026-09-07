@@ -13,13 +13,14 @@ Production-like, resilient platform designed to ingest, process, enrich, and ana
 ## Live Demo Deployment
 
 > [!NOTE]
-> The public demo endpoint below is served via a Cloudflare Quick Tunnel connected to the Docker Compose application stack for reviewer evaluation. Database, Redis, and internal backend services are bound strictly to `127.0.0.1` (localhost) to guarantee zero public internet exposure.
+> Persistent production deployment on Google Cloud `e2-micro` (IPv6-only, no external IPv4, no Cloud NAT) in `us-central1-a`, behind a stable Tailscale Funnel. Database, Redis, and internal backend services are bound strictly to Docker-internal networks / `127.0.0.1` to guarantee zero public internet exposure. Administration via Google IAP SSH.
 
-- **Demo Application URL**: [https://sides-canyon-alloy-harley.trycloudflare.com](https://sides-canyon-alloy-harley.trycloudflare.com)
-- **API Liveness**: [https://sides-canyon-alloy-harley.trycloudflare.com/health](https://sides-canyon-alloy-harley.trycloudflare.com/health)
-- **API Readiness**: [https://sides-canyon-alloy-harley.trycloudflare.com/ready](https://sides-canyon-alloy-harley.trycloudflare.com/ready)
-- **Realtime Monitor Dashboard**: [https://sides-canyon-alloy-harley.trycloudflare.com/monitor](https://sides-canyon-alloy-harley.trycloudflare.com/monitor)
-- **Featured Game Detail (Elden Ring)**: [https://sides-canyon-alloy-harley.trycloudflare.com/games/11](https://sides-canyon-alloy-harley.trycloudflare.com/games/11)
+- **Demo Application URL**: [https://metacritic-ai-monitor.tail0c0b53.ts.net](https://metacritic-ai-monitor.tail0c0b53.ts.net)
+- **API Liveness**: [https://metacritic-ai-monitor.tail0c0b53.ts.net/health](https://metacritic-ai-monitor.tail0c0b53.ts.net/health)
+- **API Readiness**: [https://metacritic-ai-monitor.tail0c0b53.ts.net/ready](https://metacritic-ai-monitor.tail0c0b53.ts.net/ready)
+- **Realtime Monitor Dashboard**: [https://metacritic-ai-monitor.tail0c0b53.ts.net/monitor](https://metacritic-ai-monitor.tail0c0b53.ts.net/monitor)
+- **Featured Game Detail (Elden Ring)**: [https://metacritic-ai-monitor.tail0c0b53.ts.net/games/11](https://metacritic-ai-monitor.tail0c0b53.ts.net/games/11)
+- **Deployment**: `spry-starlight-500514-s7` / `metacritic-ai-monitor` — `e2-micro` (1 vCPU/1 GB RAM + 4 GB swap), 30 GB `pd-standard`, Ubuntu 24.04, Docker 29, Tailscale 1.102.3 (Funnel)
 
 ---
 
@@ -54,43 +55,37 @@ For evaluators reviewing this project, here are the primary features and where t
 flowchart TD
     subgraph ClientLayer["Edge and Client"]
         Browser["User Browser (Desktop / Mobile)"]
-        CF["Cloudflare Quick Tunnel (Evaluation HTTPS)"]
+        Funnel["Tailscale Funnel (Persistent HTTPS — *.ts.net)"]
     end
 
-    subgraph ReverseProxy["Frontend Gateway"]
-        Nginx["Nginx 1.27 (Reverse Proxy and Static Server)"]
+    subgraph GCP["Google Cloud — spry-starlight-500514-s7 / us-central1-a"]
+        ReverseProxy["Frontend Gateway — Nginx 1.27 (Reverse Proxy + Static)"]
         ReactSPA["React 19 + TypeScript + Vite SPA"]
-    end
-
-    subgraph BackendApp["Application Services (Local Docker Host)"]
         FastAPI["FastAPI Backend (ASGI / Python 3.12)"]
-        CeleryWorker["Celery Worker (ForkPool / Async Pipeline)"]
-        CeleryBeat["Celery Beat (Hourly Cron: 0 * * * *)"]
+        CeleryWorker["Celery Worker — concurrency=1 (ForkPool)"]
+        CeleryBeat["Celery Beat — Hourly Cron 0 * * * * UTC"]
+        Postgres[("PostgreSQL 16 + pgvector — internal Docker network")]
+        Redis[("Redis 7 — internal Docker network")]
     end
 
-    subgraph DataLayer["Persistence and Message Broker (Localhost Bound)"]
-        Postgres[("PostgreSQL 16 + pgvector (127.0.0.1:5433)")]
-        Redis[("Redis 7 (127.0.0.1:6380)")]
+    subgraph ExternalAPIs["External Services (Outbound via IPv6 + NAT66)"]
+        Metacritic["Metacritic.com (HTML Scrape — IPv6)"]
+        OpenRouter["OpenRouter / OpenAI (LLM + Embeddings — IPv6)"]
+        YouTube["Google YouTube Data API v3 + Transcripts (IPv6)"]
     end
 
-    subgraph ExternalAPIs["External Services"]
-        Metacritic["Metacritic.com (HTML Scrape)"]
-        OpenRouter["OpenRouter / OpenAI (LLM and Embeddings)"]
-        YouTube["Google YouTube Data API v3 and Transcripts"]
-    end
-
-    Browser -->|HTTPS| CF
-    CF -->|Port 80| Nginx
-    Nginx -->|Static Assets| ReactSPA
-    Nginx -->|Unbuffered SSE and REST /api/| FastAPI
+    Browser -->|HTTPS| Funnel
+    Funnel -->|http://localhost:3000| ReverseProxy
+    ReverseProxy -->|Static Assets| ReactSPA
+    ReverseProxy -->|Unbuffered SSE + REST /api/| FastAPI
     FastAPI -->|Read/Write| Postgres
-    FastAPI -->|Cache and Enqueue| Redis
+    FastAPI -->|Cache + Enqueue| Redis
     CeleryBeat -->|Hourly Schedule| Redis
     Redis -->|Tasks| CeleryWorker
-    CeleryWorker -->|Pipelines and Deduplication| Postgres
+    CeleryWorker -->|Pipelines + Deduplication| Postgres
     CeleryWorker -->|HTTP| Metacritic
-    CeleryWorker -->|LLM and Vector API| OpenRouter
-    CeleryWorker -->|Search and Transcripts| YouTube
+    CeleryWorker -->|LLM + Vector API| OpenRouter
+    CeleryWorker -->|Search + Transcripts| YouTube
 ```
 
 ---
@@ -139,7 +134,7 @@ flowchart TD
 - **Frontend**: React 19, TypeScript, Vite, Nginx 1.27
 - **AI & Embeddings**: OpenRouter / OpenAI API (`gpt-4o-mini`, `text-embedding-3-small`)
 - **Video & Transcripts**: Google YouTube Data API v3, `youtube-transcript-api`
-- **Orchestration & Edge**: Docker, Docker Compose, Cloudflare Quick Tunnel
+ - **Orchestration & Edge**: Docker, Docker Compose, Tailscale Funnel (stable *.ts.net, no external IPv4)
 - **Quality & Testing**: pytest, pytest-asyncio, Ruff, mypy
 
 ---

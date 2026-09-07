@@ -1,0 +1,43 @@
+# Production override for e2-micro (1 GB RAM) IPv6-only VM.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# DB/Redis stay on internal Docker network only (base file binds them to 127.0.0.1).
+services:
+  postgres:
+    # Conservative memory footprint for 1 GB RAM host.
+    command: >
+      postgres
+      -c shared_buffers=64MB
+      -c effective_cache_size=256MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+      -c max_connections=50
+
+  celery-worker:
+    # Single worker process: e2-micro cannot afford CPU-count prefork pool.
+    command: celery -A app.workers.celery_app worker -l info --concurrency=1
+    volumes:
+      - ./backend:/app
+      - ./gai.conf:/etc/gai.conf:ro
+
+  backend:
+    volumes:
+      - ./backend:/app
+      - ./gai.conf:/etc/gai.conf:ro
+
+  celery-beat:
+    volumes:
+      - ./backend:/app
+      - ./gai.conf:/etc/gai.conf:ro
+
+  cloudflared:
+    # Disabled in production: public edge is Tailscale Funnel, not quick tunnel.
+    profiles: ["legacy-tunnel"]
+
+# IPv6-only host: compose user-defined network needs explicit IPv6 ULA subnet.
+# Docker daemon NAT66 (ip6tables) masquerades it to the host external IPv6.
+networks:
+  default:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: fd00:2::/64
