@@ -347,6 +347,109 @@ export const GameDetailPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Similar Games Section */}
+      <div className="section-card" style={{ marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+          <span style={{ fontSize: '1.25rem' }}>🎮</span>
+          <h3 className="section-title" style={{ margin: 0 }}>
+            Similar Games
+          </h3>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+            Semantic pgvector cosine matching
+          </span>
+        </div>
+
+        {(!game.similar_games || game.similar_games.length === 0) ? (
+          <p style={{ color: 'var(--text-muted)', fontStyle: 'italic', padding: '1rem 0' }}>
+            No similar games available yet.
+          </p>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1.25rem' }}>
+            {game.similar_games.map((sim) => {
+              const matchPercent = Math.round(sim.similarity_score * 100);
+              return (
+                <Link
+                  key={sim.id}
+                  to={`/games/${sim.id}`}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    overflow: 'hidden',
+                    textDecoration: 'none',
+                    color: 'inherit',
+                    transition: 'transform 0.2s, border-color 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-4px)';
+                    e.currentTarget.style.borderColor = 'var(--accent-primary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.borderColor = 'var(--border-color)';
+                  }}
+                >
+                  <div style={{ width: '100%', height: '140px', backgroundColor: 'rgba(0,0,0,0.3)', position: 'relative' }}>
+                    {sim.cover_url ? (
+                      <img
+                        src={sim.cover_url}
+                        alt={sim.title}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '2rem' }}>
+                        🎮
+                      </div>
+                    )}
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: '8px',
+                        right: '8px',
+                        backgroundColor: matchPercent >= 80 ? 'rgba(16, 185, 129, 0.9)' : 'rgba(59, 130, 246, 0.9)',
+                        color: '#fff',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        backdropFilter: 'blur(4px)',
+                      }}
+                    >
+                      {matchPercent}% match
+                    </span>
+                  </div>
+                  <div style={{ padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                    <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.95rem', fontWeight: 600, lineHeight: 1.3 }}>
+                      {sim.title}
+                    </h4>
+                    {sim.platforms && sim.platforms.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginTop: 'auto' }}>
+                        {sim.platforms.slice(0, 3).map((p, idx) => (
+                          <span
+                            key={idx}
+                            style={{
+                              fontSize: '0.7rem',
+                              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              color: 'var(--text-secondary)',
+                            }}
+                          >
+                            {p}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Reviews List Section with Tabs */}
       <div className="section-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>

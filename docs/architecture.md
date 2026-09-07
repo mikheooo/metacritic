@@ -141,29 +141,45 @@ This document describes the foundational architecture of the Metacritic Game Ana
 
 ---
 
-## Future Ingestion & AI Pipeline Boundaries (Stage 3+)
-
-In subsequent stages, the background processing will follow strict pipeline boundaries:
+## Stage 4 Semantic Embedding & Similarity Pipeline
 
 ```
-[1. Source Discovery]  <-- COMPLETED (Stage 2)
-      │  Discovers new releases or paginated browse links on Metacritic
+[1. Game Entity & Summaries]
+      │  Title, developer, description, platform names, critic summary, player summary
       ▼
-[2. Scraping]          <-- COMPLETED (Stage 2)
-      │  Fetches game pages, platform scores, critic reviews, and user reviews
+[2. Canonical Embedding Input Builder]
+      │  build_game_embedding_text(): deterministic ordering, whitespace normalization, no "None"
       ▼
-[3. Normalization]     <-- COMPLETED (Stage 2)
-      │  Parses raw HTML/JSON into typed schemas, sanitizes text, validates scores
+[3. Fingerprinting & Cost Control]
+      │  compute_embedding_fingerprint(): SHA-256 over canonical text, provider, model, dimensions, v1
+      │  Matches existing fingerprint? -> status = "skipped_unchanged", 0 API tokens consumed!
       ▼
-[4. Persistence & Deduplication] <-- COMPLETED (Stage 2)
-      │  Applies DailyGameProcessing calendar invariant, updates Games and GamePlatforms
+[4. Embedding Provider]
+      │  OpenRouterEmbeddingProvider: AsyncOpenAI -> openrouter.ai (openai/text-embedding-3-small)
+      │  Strict credentials check: missing key -> ValueError (no silent fake fallback)
       ▼
-[5. Review Analysis (AI / LLM)]
-      │  Extracts key themes, sentiment, pros/cons, and produces structured summaries
+[5. Vector Validation]
+      │  validate_vector(): checks len == 1536, validates all elements are finite floats (rejects NaN, Inf)
       ▼
-[6. Similarity Engine]
-      │  Generates embeddings for games and calculates vector similarity rankings
+[6. PostgreSQL pgvector Persistence]
+      │  game_embeddings table: VECTOR(1536), provider, model, fingerprint
+      │  HNSW index: USING hnsw (embedding vector_cosine_ops)
       ▼
-[7. Enrichment (YouTube & Media)]
-      │  Fetches related video coverage, trailers, and reviews
+[7. Cosine Similarity Engine (PostgreSQL)]
+      │  Executes native pgvector cosine distance:
+      │  SELECT game_id, (1 - (embedding <=> :target_vector)) FROM game_embeddings
+      │  WHERE game_id != :source_game_id ORDER BY embedding <=> :target_vector ASC LIMIT 5
+      ▼
+[8. Materialized Recommendation Cache]
+      │  similar_games table: game_id, similar_game_id, similarity_score, algorithm_version ("cosine-v1")
+      │  Atomic replacement per game within a clean transaction (no duplicate pairs, no self-reference)
+      ▼
+[9. Downstream Delivery]
+      │  FastAPI: GET /api/games/{id} exposes similar_games list
+      │  React UI: interactive Similar Games card grid with similarity score badge and navigation
 ```
+
+### Recommendation Cache Scaling Trade-off
+
+- For current catalog scale (hundreds to thousands of games), executing `rebuild_all` recalculates top-K recommendations for all games in sub-second time directly in PostgreSQL leveraging the HNSW vector index.
+- For enterprise scale (millions of games), full recomputation would be replaced with an event-driven incremental update where a newly embedded game updates its own top-K and triggers reverse-neighborhood checks on approximate candidate clusters.

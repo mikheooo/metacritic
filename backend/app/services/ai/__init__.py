@@ -1,3 +1,18 @@
+from app.services.ai.embedding_builder import (
+    build_game_embedding_text,
+    compute_embedding_fingerprint,
+)
+from app.services.ai.embedding_provider import (
+    EmbeddingProvider,
+    EmbeddingResult,
+    FakeEmbeddingProvider,
+    OpenRouterEmbeddingProvider,
+    get_embedding_provider,
+)
+from app.services.ai.embedding_service import (
+    EmbeddingRefreshResult,
+    GameEmbeddingService,
+)
 from app.services.ai.enrichment_service import (
     EnrichmentResult,
     ReviewEnrichmentService,
@@ -7,6 +22,9 @@ from app.services.ai.sampling import (
     classify_sentiment,
     compute_input_fingerprint,
     select_reviews_for_summary,
+)
+from app.services.ai.similarity_service import (
+    SimilarGamesService,
 )
 from app.services.ai.summarizer import (
     FakeReviewSummarizer,
@@ -34,6 +52,14 @@ __all__ = [
     "ReviewEnrichmentService",
     "EnrichmentResult",
     "SummaryExecutionResult",
+    "build_game_embedding_text",
+    "compute_embedding_fingerprint",
+    "EmbeddingResult",
+    "EmbeddingProvider",
+    "OpenRouterEmbeddingProvider",
+    "FakeEmbeddingProvider",
+    "get_embedding_provider",
+    "EmbeddingRefreshResult",
+    "GameEmbeddingService",
+    "SimilarGamesService",
 ]
-
-

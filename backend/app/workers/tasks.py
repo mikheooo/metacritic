@@ -153,3 +153,65 @@ def summarize_game_reviews(game_id: int, review_type: str = "both") -> dict[str,
             return {"game_id": game_id, "results": results}
 
     return _run_async_safely(_execute())
+
+
+@celery_app.task(name="tasks.embed_game")
+def embed_game(game_id: int, force: bool = False) -> dict[str, Any]:
+    """
+    Celery task to generate or refresh semantic embedding for a specific game.
+    """
+    logger.info("Starting embedding task for game_id=%d (force=%s)", game_id, force)
+
+    async def _execute() -> dict[str, Any]:
+        from app.services.ai import GameEmbeddingService
+
+        async with AsyncSessionLocal() as db_session:
+            service = GameEmbeddingService(db=db_session)
+            res = await service.refresh_game_embedding(game_id=game_id, force=force)
+            return {
+                "game_id": res.game_id,
+                "status": res.status,
+                "provider": res.provider,
+                "model": res.model,
+                "dimensions": res.dimensions,
+                "fingerprint": res.input_fingerprint,
+                "input_tokens": res.input_tokens,
+                "error": res.error,
+            }
+
+    return _run_async_safely(_execute())
+
+
+@celery_app.task(name="tasks.embed_all_games")
+def embed_all_games(force: bool = False) -> dict[str, Any]:
+    """
+    Celery task to generate/refresh embeddings for all games in the catalog.
+    """
+    logger.info("Starting batch embedding task for all games (force=%s)", force)
+
+    async def _execute() -> dict[str, Any]:
+        from app.services.ai import GameEmbeddingService
+
+        async with AsyncSessionLocal() as db_session:
+            service = GameEmbeddingService(db=db_session)
+            return await service.embed_all(force=force)
+
+    return _run_async_safely(_execute())
+
+
+@celery_app.task(name="tasks.rebuild_similar_games")
+def rebuild_similar_games() -> dict[str, Any]:
+    """
+    Celery task to rebuild recommendation cache for all embedded games in the catalog.
+    """
+    logger.info("Starting similarity cache rebuild task")
+
+    async def _execute() -> dict[str, Any]:
+        from app.services.ai import SimilarGamesService
+
+        async with AsyncSessionLocal() as db_session:
+            service = SimilarGamesService(db=db_session)
+            return await service.rebuild_all()
+
+    return _run_async_safely(_execute())
+

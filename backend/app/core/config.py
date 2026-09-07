@@ -76,6 +76,13 @@ class Settings(BaseSettings):
     SUMMARY_LANGUAGE: str = "ru"
     SUMMARY_PROMPT_VERSION: str = "v1"
 
+    # AI & Embedding Settings
+    EMBEDDING_PROVIDER: str = "openrouter"
+    EMBEDDING_MODEL: str = "openai/text-embedding-3-small"
+    EMBEDDING_DIMENSIONS: int = 1536
+    EMBEDDING_INPUT_VERSION: str = "v1"
+    SIMILAR_GAMES_LIMIT: int = 5
+
     # OpenRouter Configuration
     OPENROUTER_API_KEY: str | None = None
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"

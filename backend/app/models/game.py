@@ -1,14 +1,14 @@
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, DateTime, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.db.base import Base
 
 if TYPE_CHECKING:
+    from app.models.embedding import GameEmbedding
     from app.models.platform import GamePlatform
     from app.models.review import Review
     from app.models.similar import SimilarGame
@@ -28,10 +28,6 @@ class Game(Base):
     trailer_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     critic_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    embedding: Mapped[Any | None] = mapped_column(
-        JSON().with_variant(JSONB, "postgresql"),
-        nullable=True,
-    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -46,6 +42,13 @@ class Game(Base):
     )
 
     # Relationships
+    embedding_record: Mapped["GameEmbedding | None"] = relationship(
+        "GameEmbedding",
+        back_populates="game",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
     game_platforms: Mapped[list["GamePlatform"]] = relationship(
         "GamePlatform",
         back_populates="game",

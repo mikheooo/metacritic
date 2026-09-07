@@ -58,6 +58,14 @@ export interface GameReviewSummary {
   updated_at: string;
 }
 
+export interface SimilarGameItem {
+  id: number;
+  title: string;
+  cover_url: string | null;
+  similarity_score: number;
+  platforms: string[];
+}
+
 export interface GameDetail extends Game {
   reviews: Review[];
   review_summaries?: GameReviewSummary[];
@@ -65,6 +73,7 @@ export interface GameDetail extends Game {
   user_summary_detail?: GameReviewSummary | null;
   critic_review_count?: number;
   user_review_count?: number;
+  similar_games?: SimilarGameItem[];
 }
 
 

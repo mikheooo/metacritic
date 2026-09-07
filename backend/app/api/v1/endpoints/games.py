@@ -2,12 +2,16 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_db
+from app.models.game import Game
+from app.models.platform import GamePlatform
 from app.models.review import Review
+from app.models.similar import SimilarGame
 from app.models.summary import GameReviewSummary
 from app.schemas.common import SortField, SortOrder
-from app.schemas.game import GameDetailRead, GameListResponse, GameRead
+from app.schemas.game import GameDetailRead, GameListResponse, GameRead, SimilarGameItemRead
 from app.schemas.summary import GameReviewSummaryRead
 from app.services.game_service import get_game_by_id, get_games
 
@@ -52,7 +56,7 @@ async def list_games(
     "/{game_id}",
     response_model=GameDetailRead,
     summary="Get Game Details",
-    description="Retrieve detailed game card including platform scores, reviews, and structured AI summaries.",
+    description="Retrieve detailed game card including platform scores, reviews, structured AI summaries, and similar games.",
 )
 async def get_game(
     game_id: int,
@@ -77,11 +81,44 @@ async def get_game(
         elif s.review_type == "user":
             user_sum = s
 
-
     stmt_c = select(func.count(Review.id)).where(Review.game_id == game_id, Review.review_type == "critic")
     stmt_u = select(func.count(Review.id)).where(Review.game_id == game_id, Review.review_type == "user")
     critic_count = await db.scalar(stmt_c) or 0
     user_count = await db.scalar(stmt_u) or 0
+
+    # Load similar games from recommendation cache
+    stmt_sim = (
+        select(SimilarGame)
+        .options(
+            selectinload(SimilarGame.similar_game)
+            .selectinload(Game.game_platforms)
+            .selectinload(GamePlatform.platform)
+        )
+        .where(SimilarGame.game_id == game_id)
+        .order_by(SimilarGame.similarity_score.desc())
+    )
+    sim_res = await db.execute(stmt_sim)
+    similar_rows = sim_res.scalars().all()
+
+    similar_items: list[SimilarGameItemRead] = []
+    for s_row in similar_rows:
+        sim_game = s_row.similar_game
+        if not sim_game or sim_game.id == game_id:
+            continue
+        plat_names = [
+            gp.platform.name
+            for gp in getattr(sim_game, "game_platforms", [])
+            if gp.platform and gp.platform.name
+        ]
+        similar_items.append(
+            SimilarGameItemRead(
+                id=sim_game.id,
+                title=sim_game.title,
+                cover_url=sim_game.cover_url,
+                similarity_score=round(s_row.similarity_score, 4),
+                platforms=plat_names,
+            )
+        )
 
     detail = GameDetailRead.model_validate(game)
     if critic_sum:
@@ -90,7 +127,7 @@ async def get_game(
         detail.user_summary_detail = GameReviewSummaryRead.model_validate(user_sum)
     detail.critic_review_count = critic_count
     detail.user_review_count = user_count
-
+    detail.similar_games = similar_items
 
     return detail
 

@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -21,7 +20,7 @@ class GameBase(BaseModel):
 
 
 class GameCreate(GameBase):
-    embedding: Any | None = None
+    pass
 
 
 class GameRead(GameBase):
@@ -33,6 +32,16 @@ class GameRead(GameBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class SimilarGameItemRead(BaseModel):
+    id: int
+    title: str
+    cover_url: str | None = None
+    similarity_score: float
+    platforms: list[str] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class GameDetailRead(GameRead):
     reviews: list[ReviewRead] = []
     review_summaries: list[GameReviewSummaryRead] = []
@@ -40,9 +49,9 @@ class GameDetailRead(GameRead):
     user_summary_detail: GameReviewSummaryRead | None = None
     critic_review_count: int = 0
     user_review_count: int = 0
+    similar_games: list[SimilarGameItemRead] = []
 
     model_config = ConfigDict(from_attributes=True)
-
 
 
 class GameListResponse(BaseModel):

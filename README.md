@@ -292,6 +292,14 @@ docker compose run --rm backend python -m app.cli enrich --slug elden-ring
 
 # Re-summarize existing reviews without re-scraping
 docker compose run --rm backend python -m app.cli enrich --game-id 11 --summarize-only
+
+# Generate semantic vector embeddings
+docker compose run --rm backend python -m app.cli embed --game-id 11
+docker compose run --rm backend python -m app.cli embed --all
+
+# Compute and materialize similar game recommendations
+docker compose run --rm backend python -m app.cli similarity --game-id 11
+docker compose run --rm backend python -m app.cli similarity --rebuild-all
 ```
 
 ### Celery Task Entrypoints
@@ -299,7 +307,14 @@ docker compose run --rm backend python -m app.cli enrich --game-id 11 --summariz
 Scheduled or asynchronous jobs are dispatched via Celery:
 
 ```python
-from app.workers.tasks import process_metacritic_batch, enrich_game_reviews, summarize_game_reviews
+from app.workers.tasks import (
+    process_metacritic_batch,
+    enrich_game_reviews,
+    summarize_game_reviews,
+    embed_game,
+    embed_all_games,
+    rebuild_similar_games,
+)
 
 # Batch crawl task
 crawl_task = process_metacritic_batch.delay(limit=20, trigger_type="scheduled", dry_run=False)
@@ -309,68 +324,64 @@ enrich_task = enrich_game_reviews.delay(game_id=11)
 
 # Summarize task (without re-ingesting)
 sum_task = summarize_game_reviews.delay(game_id=11, review_type="both")
+
+# Semantic embedding task
+embed_task = embed_game.delay(game_id=11)
+embed_all_task = embed_all_games.delay()
+
+# Similar games cache rebuild task
+sim_task = rebuild_similar_games.delay()
 ```
 
 ---
 
-## Current Status: Stage 3.2 COMPLETE (LLM Provenance & Credential Hygiene Verified)
+## Current Status: Stage 4 COMPLETE (Embeddings, pgvector & Similar Games Verified)
 
-### AI Summarizer Providers & Semantics
+### Semantic Embeddings & pgvector Pipeline
 
-The AI summarization layer strictly separates provider identity in DB/API persistence from the underlying client SDK:
-
-- **`OpenRouterReviewSummarizer` (Production Default)**:
-  - Connects to OpenRouter gateway (`https://openrouter.ai/api/v1`) using OpenAI-compatible SDK with structured JSON outputs (`beta.chat.completions.parse`).
-  - Configured via:
-    ```bash
-    LLM_PROVIDER=openrouter
-    OPENROUTER_API_KEY=sk-or-v1-...
-    OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-    LLM_MODEL=openai/gpt-4o-mini
+- **Canonical Representation (`build_game_embedding_text`)**:
+  - Deterministically constructs embedding input from Title, Developer, Platforms (alphabetically sorted), Description, Critic summary, and Player summary.
+  - Excludes dynamic metrics (Metascore, Userscore, IDs, timestamps, URLs, tokens) so that scores do not skew semantic similarity. Never outputs literal `"None"`.
+- **SHA-256 Fingerprint Cost Control (`compute_embedding_fingerprint`)**:
+  - Binds canonical text, provider (`openrouter`), model (`openai/text-embedding-3-small`), dimensions (`1536`), and input version (`v1`).
+  - Idempotent: identical fingerprint skips remote embedding API calls (`status="skipped_unchanged"`), incurring zero token cost.
+- **pgvector & HNSW Indexing (`game_embeddings`)**:
+  - Persisted in PostgreSQL using official `pgvector.sqlalchemy.Vector(1536)` in dedicated `game_embeddings` table.
+  - Accelerated via HNSW index: `CREATE INDEX ix_game_embeddings_vector ON game_embeddings USING hnsw (embedding vector_cosine_ops)`.
+- **Cosine Similarity Engine (`SimilarGamesService`)**:
+  - Executes native PostgreSQL pgvector cosine distance queries:
+    ```sql
+    SELECT game_id, (1.0 - (embedding <=> :target_vector)) AS similarity_score
+    FROM game_embeddings
+    WHERE game_id != :source_game_id
+    ORDER BY embedding <=> :target_vector ASC
+    LIMIT 5;
     ```
-  - Persists canonical provider as `openrouter` (not `openai`) and model as `openai/gpt-4o-mini`.
-  - **Strict Credential Invariant**: If `LLM_PROVIDER=openrouter` and `OPENROUTER_API_KEY` is missing or empty, the factory raises an explicit controlled `ValueError`. **Zero silent fallback to fake.**
-
-- **`OpenAIReviewSummarizer` (Direct OpenAI Mode)**:
-  - Connects directly to OpenAI (`https://api.openai.com/v1`).
-  - Configured via:
-    ```bash
-    LLM_PROVIDER=openai
-    OPENAI_API_KEY=sk-...
-    OPENAI_BASE_URL=https://api.openai.com/v1
-    LLM_MODEL=gpt-4o-mini
-    ```
-  - Persists canonical provider as `openai`.
-  - **Strict Credential Invariant**: If `LLM_PROVIDER=openai` and `OPENAI_API_KEY` is missing or empty, raises an explicit controlled `ValueError`. **Zero silent fallback to fake.**
-
-- **`FakeReviewSummarizer` (Testing & Deterministic Local Mode)**:
-  - Used strictly for unit tests, regression tests, and explicit local dry-run testing (`LLM_PROVIDER=fake`).
-  - Fast, fully deterministic, zero-network summarization.
-
-- **Fingerprinting & Cost Control**:
-  - `compute_input_fingerprint` uniquely binds review IDs, content hashes, `provider`, `model`, `prompt_version`, `review_type`, and `language`.
-  - The hash is sensitive to provider identity (`openrouter` vs `openai` vs `fake`), ensuring proper regeneration upon configuration change.
-  - Subsequent unchanged runs detect the identical fingerprint and strictly bypass LLM calls (`skipped_unchanged`), incurring zero token cost.
+  - Invariants: never recommends self, excludes unembedded games, enforces atomic per-game replacement in `similar_games` recommendation cache.
+- **Frontend Interaction**:
+  - Game Detail view (`/games/:id`) includes interactive **Similar Games** card grid rendering cover images, titles, platform badges, and similarity match percentage indicators.
+  - Clicking any card seamlessly navigates to `/games/:similar_game_id` and reloads full game details.
 
 ### Checklist
 - [x] Full-stack directory structure & container orchestration
-- [x] SQLAlchemy 2.0 models with strict constraints (`DailyGameProcessing`, `DailyCrawlState`, `CrawlRun`, `Review`, `GameReviewSummary`)
+- [x] SQLAlchemy 2.0 models with strict constraints (`DailyGameProcessing`, `DailyCrawlState`, `CrawlRun`, `Review`, `GameReviewSummary`, `GameEmbedding`, `SimilarGame`)
 - [x] Pure decoupled parser (`MetacriticParser`) with critic/user review extraction and HTML test fixtures
 - [x] Resilient HTTP client (`MetacriticClient`) with rate limiting and exponential backoff
 - [x] Concurrency protection via Redis distributed lock (`CrawlLock`)
 - [x] Calendar day deduplication invariant via `DailyGameProcessing`
 - [x] Cursor vs ledger progression (`DailyCrawlState` pointer vs `DailyGameProcessing` truth)
-- [x] Per-game failure isolation with transaction savepoints
-- [x] Deterministic review sampling (`select_reviews_for_summary`) with sentiment quota and platform interleaving
-- [x] Canonical SHA-256 fingerprinting (`compute_input_fingerprint`) factoring in review corpus, provider, model, and prompt version
-- [x] Distinct OpenRouter (`OpenRouterReviewSummarizer`) and direct OpenAI (`OpenAIReviewSummarizer`) implementations with structured outputs
-- [x] Strict credential validation for both `openrouter` and `openai` (explicit `ValueError`, no silent fake fallback)
-- [x] Input fingerprint sensitivity verified for `provider=openrouter` vs `provider=openai`
-- [x] System prompt injection defenses with untrusted `<REVIEWS>` delimiters
-- [x] Developer CLI (`python -m app.cli crawl`, `python -m app.cli enrich`) and Celery tasks (`tasks.enrich_game_reviews`, `tasks.summarize_game_reviews`)
-- [x] Frontend UI on `/games/:id` rendering "Critics say" and "Players say" cards with 3 likes, 3 dislikes, review counts, provider/model badges, and review tabs
-- [x] 61 automated tests covering parser, models, API, daily crawler state transitions, sampling, fingerprinting, provider failure, provider switch, and review enrichment
-- [x] Controlled live validation verifying OpenRouter API calls, `provider=openrouter` in DB and REST API, second-run LLM skipping, and Celery task execution
-- [x] Clean Ruff and mypy validation (0 errors across 47 source files)
+- [x] Deterministic review sampling & LLM structured summaries (OpenRouter + OpenAI compatible)
+- [x] Alembic migration 003: pgvector extension, `game_embeddings` table with `VECTOR(1536)`, HNSW cosine index, `similar_games` algorithm version, legacy `games.embedding` dropped
+- [x] Embedding provider abstraction (`EmbeddingProvider` protocol, `OpenRouterEmbeddingProvider`, `FakeEmbeddingProvider`)
+- [x] Deterministic canonical embedding input builder (`build_game_embedding_text`) and SHA-256 fingerprinting
+- [x] Cost-control invariant: identical fingerprint skips embedding API calls (`skipped_unchanged`)
+- [x] Vector validation: rejects wrong dimensions, NaN, Infinity, and empty vectors
+- [x] PostgreSQL pgvector cosine similarity computation and atomic recommendation cache materialization (`similar_games`)
+- [x] Celery background tasks (`tasks.embed_game`, `tasks.embed_all_games`, `tasks.rebuild_similar_games`) and CLI (`python -m app.cli embed`, `python -m app.cli similarity`)
+- [x] REST API `GET /api/games/{id}` returns `similar_games` array; raw embeddings never exposed
+- [x] Frontend UI on `/games/:id` renders interactive Similar Games card grid with similarity score match badges and seamless routing
+- [x] 76 automated tests covering parser, models, API, daily crawler state transitions, sampling, fingerprinting, provider failure, embedding validation, synthetic vector ranking, and similarity constraints
+- [x] Controlled live validation: all 11 games embedded via OpenRouter (`openai/text-embedding-3-small`), second unchanged run skips 100%, similarity rebuilt, SQL duplicate/self-reference audits clean
+- [x] Clean Ruff (0 lint errors) and mypy (0 type errors across 52 source files) validation
 
 
