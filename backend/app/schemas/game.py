@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict
 from app.schemas.platform import GamePlatformRead
 from app.schemas.review import ReviewRead
 from app.schemas.summary import GameReviewSummaryRead
+from app.schemas.youtube import YouTubeLetsPlayRead
 
 
 class GameBase(BaseModel):
@@ -50,6 +51,7 @@ class GameDetailRead(GameRead):
     critic_review_count: int = 0
     user_review_count: int = 0
     similar_games: list[SimilarGameItemRead] = []
+    lets_play: YouTubeLetsPlayRead | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

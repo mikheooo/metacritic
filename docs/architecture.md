@@ -269,3 +269,70 @@ This document describes the foundational architecture of the Metacritic Game Ana
    - Both Celery Beat and public `Run Now` invocations strictly execute the canonical production batch of 20 games (`settings.CRAWL_BATCH_LIMIT = 20`).
    - The public HTTP API does not allow user-supplied batch limit overrides. Custom small limits (`limit < 20`) are strictly reserved for developer CLI tooling (`app.cli`) and automated test fixtures.
 
+---
+
+## Stage 6: YouTube Let's Play Discovery, Transcript & AI Summary
+
+```
+                                [ Game Ingested ]
+                                        │
+                                        ▼
+                  [ YouTube Search Provider: Data API v3 / Fake ]
+                     Query: "{title} gameplay walkthrough let's play"
+                                        │
+                                        ▼
+                  [ Deterministic Candidate Relevance Filter ]
+                   - Reject: trailers, OSTs, reviews, reactions,
+                     dev diaries, shorts (#shorts or <180s)
+                   - Verify: title token overlap
+                   - Order: view_count DESC
+                                        │
+                                        ▼
+                  [ Popularity-Ordered Transcript Acquisition ]
+                   - Attempt candidate #1 transcript (youtube-transcript-api)
+                   - If unavailable: fallback to #2, #3, ...
+                   - If all unavailable: keep #1 (status: transcript_unavailable)
+                                        │
+                                        ▼
+                  [ Security & Bounded Content Preparation ]
+                   - Prompt injection defense delimiters & instructions
+                   - Bounded length chunking (beginning, middle, conclusion)
+                                        │
+                                        ▼
+                  [ Fingerprint Cost Control & AI Summarization ]
+                   - Compute SHA-256 compound fingerprint
+                   - If fingerprint matches existing summary: skip paid LLM
+                   - Else: OpenRouter / OpenAI structured summary + key points
+                                        │
+                                        ▼
+                  [ Atomic Database Persistence (Alembic 006) ]
+                   - game_youtube_videos
+                   - youtube_transcripts
+                   - youtube_summaries
+                   - crawl_runs.youtube_processed_count
+                                        │
+                                        ▼
+                  [ Exposure: REST API & Frontend Card ]
+                   - GET /api/games/{id} -> lets_play object (transcript excluded)
+                   - React UI -> "Popular Let's Play" card with "Watch on YouTube"
+```
+
+### Key Architectural Invariants of Stage 6
+
+1. **Decoupled Search & Transcript Protocols**:
+   - `YouTubeSearchProvider` and `TranscriptProvider` use Python protocols with production implementations (`YouTubeDataApiProvider`, `YouTubeTranscriptApiProvider`) and deterministic mock implementations (`FakeYouTubeSearchProvider`, `FakeTranscriptProvider`).
+2. **Relevance Filter Authority**:
+   - Prevents promotional trailers, sound tracks, reviews, and short clips from masquerading as long-form Let's Play gameplay.
+3. **Transcript Fallback Resilience**:
+   - Instead of discarding candidates if the highest-viewed video has disabled captions, the algorithm walks down candidates in descending view count order to find the most popular video with accessible captions.
+4. **Prompt Injection Hardening**:
+   - Transcripts are untrusted external text. Prompts use delimiter wrapping and explicit instructions stating never to follow commands found within the transcript.
+5. **Cost Optimization Fingerprints**:
+   - `compute_youtube_summary_fingerprint` ensures identical video transcripts never re-trigger paid LLM calls.
+   - `YOUTUBE_SEARCH_REFRESH_HOURS` (default 24h) prevents repeated YouTube search quota consumption for recently refreshed games.
+6. **Failure Isolation Invariant**:
+   - YouTube enrichment is an optional, non-fatal downstream substage (Substage E). Failure in YouTube search, transcript fetching, or video summarization never rolls back game ingestion, reviews, or embeddings.
+7. **Safe Data Exposure**:
+   - Raw multi-megabyte speech transcripts are stored in `youtube_transcripts` for provenance but omitted from public `GET /api/games/{id}` responses to keep payload sizes minimal and fast.
+
+

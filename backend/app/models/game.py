@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.models.review import Review
     from app.models.similar import SimilarGame
     from app.models.summary import GameReviewSummary
+    from app.models.youtube import GameYouTubeVideo
 
 
 class Game(Base):
@@ -73,6 +74,13 @@ class Game(Base):
         "SimilarGame",
         primaryjoin="Game.id == SimilarGame.game_id",
         back_populates="game",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    youtube_video: Mapped["GameYouTubeVideo | None"] = relationship(
+        "GameYouTubeVideo",
+        back_populates="game",
+        uselist=False,
         cascade="all, delete-orphan",
         lazy="selectin",
     )

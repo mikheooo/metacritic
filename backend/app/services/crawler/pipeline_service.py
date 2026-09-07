@@ -17,6 +17,7 @@ from app.services.crawler.client import MetacriticClient
 from app.services.crawler.ingestion_service import IngestionService
 from app.services.crawler.lock import CrawlAlreadyRunningError, CrawlLock
 from app.services.crawler.source import MetacriticSource
+from app.services.youtube import YouTubeEnrichmentService
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,7 @@ class PipelineExecutionResult:
     reviews_processed_count: int
     summaries_generated_count: int
     embeddings_generated_count: int
+    youtube_processed_count: int = 0
     errors: list[str] = field(default_factory=list)
 
 
@@ -94,6 +96,7 @@ class MetacriticPipelineService:
         enrichment_service: ReviewEnrichmentService | None = None,
         embedding_service: GameEmbeddingService | None = None,
         similarity_service: SimilarGamesService | None = None,
+        youtube_service: YouTubeEnrichmentService | None = None,
     ) -> None:
         self.db = db
         self.source = source or MetacriticClient()
@@ -103,6 +106,7 @@ class MetacriticPipelineService:
         )
         self.embedding_service = embedding_service or GameEmbeddingService(db=self.db)
         self.similarity_service = similarity_service or SimilarGamesService(db=self.db)
+        self.youtube_service = youtube_service or YouTubeEnrichmentService(db=self.db)
 
     async def emit_event(
         self,
@@ -525,6 +529,118 @@ class MetacriticPipelineService:
                         )
                         await self.db.commit()
 
+                    # --- Substage E: YouTube Let's Play Discovery & Enrichment ---
+                    crawl_run.current_stage = PipelineStage.YOUTUBE.value
+                    crawl_run.heartbeat_at = get_current_datetime()
+                    await self.emit_event(
+                        crawl_run_id=crawl_run.id,
+                        event_type="youtube_search_started",
+                        stage=PipelineStage.YOUTUBE.value,
+                        message=f"Searching YouTube Let's Play for '{game.title}'",
+                        game_id=game.id,
+                    )
+                    await self.db.commit()
+
+                    try:
+                        yt_res = await self.youtube_service.enrich_game(game.id)
+                        if yt_res.status in ("generated", "updated", "enriched"):
+                            crawl_run.youtube_processed_count += 1
+                            await self.emit_event(
+                                crawl_run_id=crawl_run.id,
+                                event_type="youtube_video_selected",
+                                stage=PipelineStage.YOUTUBE.value,
+                                message=f"Selected YouTube video {yt_res.video_id} for '{game.title}' (rank #{yt_res.selection_rank})",
+                                game_id=game.id,
+                                payload={
+                                    "video_id": yt_res.video_id,
+                                    "rank": yt_res.selection_rank,
+                                    "reason": yt_res.selection_reason,
+                                },
+                            )
+                            if yt_res.transcript_status == "fetched":
+                                await self.emit_event(
+                                    crawl_run_id=crawl_run.id,
+                                    event_type="youtube_transcript_fetched",
+                                    stage=PipelineStage.YOUTUBE.value,
+                                    message=f"Fetched speech transcript for YouTube video {yt_res.video_id}",
+                                    game_id=game.id,
+                                    payload={"video_id": yt_res.video_id},
+                                )
+                            if yt_res.summary_status == "generated":
+                                await self.emit_event(
+                                    crawl_run_id=crawl_run.id,
+                                    event_type="youtube_summary_generated",
+                                    stage=PipelineStage.YOUTUBE.value,
+                                    message=f"Generated AI video summary for '{game.title}'",
+                                    game_id=game.id,
+                                    payload={"video_id": yt_res.video_id},
+                                )
+                            elif yt_res.summary_status == "skipped_unchanged":
+                                await self.emit_event(
+                                    crawl_run_id=crawl_run.id,
+                                    event_type="youtube_summary_skipped",
+                                    stage=PipelineStage.YOUTUBE.value,
+                                    message=f"Skipped video summary for '{game.title}' (unchanged fingerprint)",
+                                    game_id=game.id,
+                                    payload={"video_id": yt_res.video_id},
+                                )
+                        elif yt_res.status == "skipped_fresh":
+                            crawl_run.youtube_processed_count += 1
+                            await self.emit_event(
+                                crawl_run_id=crawl_run.id,
+                                event_type="youtube_summary_skipped",
+                                stage=PipelineStage.YOUTUBE.value,
+                                message=f"Skipped YouTube search for '{game.title}' (fresh within TTL)",
+                                game_id=game.id,
+                                payload={"video_id": yt_res.video_id, "status": "skipped_fresh"},
+                            )
+                        elif yt_res.status == "transcript_unavailable":
+                            crawl_run.youtube_processed_count += 1
+                            await self.emit_event(
+                                crawl_run_id=crawl_run.id,
+                                event_type="youtube_transcript_unavailable",
+                                stage=PipelineStage.YOUTUBE.value,
+                                message=f"YouTube video found for '{game.title}', but transcript is unavailable",
+                                game_id=game.id,
+                                payload={"video_id": yt_res.video_id},
+                            )
+                        elif yt_res.status == "no_relevant_video":
+                            await self.emit_event(
+                                crawl_run_id=crawl_run.id,
+                                event_type="youtube_no_video",
+                                stage=PipelineStage.YOUTUBE.value,
+                                message=f"No relevant YouTube Let's Play video found for '{game.title}'",
+                                game_id=game.id,
+                                payload={"error": yt_res.error},
+                            )
+                        elif yt_res.status == "failed":
+                            logger.warning(
+                                "YouTube enrichment failed for '%s': %s", game.title, yt_res.error
+                            )
+                            await self.emit_event(
+                                crawl_run_id=crawl_run.id,
+                                event_type="youtube_failed",
+                                stage=PipelineStage.YOUTUBE.value,
+                                message=f"YouTube enrichment failed: {yt_res.error}",
+                                game_id=game.id,
+                                payload={"error": yt_res.error},
+                            )
+                        await self.db.commit()
+
+                    except Exception as exc:
+                        await self.db.rollback()
+                        err_msg = f"YouTube enrichment error for '{game.title}': {exc}"
+                        logger.warning(err_msg, exc_info=True)
+                        await self.emit_event(
+                            crawl_run_id=crawl_run.id,
+                            event_type="youtube_failed",
+                            stage=PipelineStage.YOUTUBE.value,
+                            message=err_msg,
+                            game_id=game.id,
+                            payload={"error": str(exc)},
+                        )
+                        await self.db.commit()
+
                     # Increment accurate counters
                     if game_had_error:
                         crawl_run.failed_count += 1
@@ -612,6 +728,7 @@ class MetacriticPipelineService:
                         "reviews_processed_count": crawl_run.reviews_processed_count,
                         "summaries_generated_count": crawl_run.summaries_generated_count,
                         "embeddings_generated_count": crawl_run.embeddings_generated_count,
+                        "youtube_processed_count": crawl_run.youtube_processed_count,
                     },
                 )
                 await self.db.commit()
@@ -627,6 +744,7 @@ class MetacriticPipelineService:
                     reviews_processed_count=crawl_run.reviews_processed_count,
                     summaries_generated_count=crawl_run.summaries_generated_count,
                     embeddings_generated_count=crawl_run.embeddings_generated_count,
+                    youtube_processed_count=crawl_run.youtube_processed_count,
                     errors=errors,
                 )
 

@@ -83,6 +83,7 @@ def process_metacritic_pipeline(
                 "reviews_processed_count": res.reviews_processed_count,
                 "summaries_generated_count": res.summaries_generated_count,
                 "embeddings_generated_count": res.embeddings_generated_count,
+                "youtube_processed_count": res.youtube_processed_count,
                 "errors": res.errors,
             }
 
@@ -261,5 +262,71 @@ def rebuild_similar_games() -> dict[str, Any]:
         async with AsyncSessionLocal() as db_session:
             service = SimilarGamesService(db=db_session)
             return await service.rebuild_all()
+
+    return _run_async_safely(_execute())
+
+
+@celery_app.task(name="tasks.enrich_game_youtube")
+def enrich_game_youtube(game_id: int, force: bool = False) -> dict[str, Any]:
+    """
+    Celery task to discover, transcribe, and summarize a YouTube Let's Play for a game.
+    """
+    logger.info("Starting YouTube enrichment task for game_id=%d (force=%s)", game_id, force)
+
+    async def _execute() -> dict[str, Any]:
+        from app.services.youtube import YouTubeEnrichmentService
+
+        async with AsyncSessionLocal() as db_session:
+            service = YouTubeEnrichmentService(db=db_session)
+            res = await service.enrich_game(game_id=game_id, force=force)
+            return {
+                "game_id": res.game_id,
+                "status": res.status,
+                "video_id": res.video_id,
+                "selection_rank": res.selection_rank,
+                "selection_reason": res.selection_reason,
+                "transcript_status": res.transcript_status,
+                "summary_status": res.summary_status,
+                "error": res.error,
+            }
+
+    return _run_async_safely(_execute())
+
+
+@celery_app.task(name="tasks.enrich_missing_youtube")
+def enrich_missing_youtube() -> dict[str, Any]:
+    """
+    Celery task to run YouTube Let's Play enrichment for all games missing YouTube data.
+    """
+    logger.info("Starting YouTube enrichment for games missing Let's Play data")
+
+    async def _execute() -> dict[str, Any]:
+        from sqlalchemy import select
+
+        from app.models.game import Game
+        from app.models.youtube import GameYouTubeVideo
+        from app.services.youtube import YouTubeEnrichmentService
+
+        async with AsyncSessionLocal() as db_session:
+            stmt = (
+                select(Game.id)
+                .outerjoin(GameYouTubeVideo, Game.id == GameYouTubeVideo.game_id)
+                .where(GameYouTubeVideo.id.is_(None))
+                .order_by(Game.id.asc())
+            )
+            res = await db_session.execute(stmt)
+            missing_ids = list(res.scalars().all())
+
+            service = YouTubeEnrichmentService(db=db_session)
+            results = []
+            for gid in missing_ids:
+                r = await service.enrich_game(game_id=gid)
+                results.append({"game_id": gid, "status": r.status, "video_id": r.video_id})
+
+            return {
+                "total_missing": len(missing_ids),
+                "processed": len(results),
+                "details": results,
+            }
 
     return _run_async_safely(_execute())

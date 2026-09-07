@@ -9,9 +9,15 @@ from app.models.platform import GamePlatform
 from app.models.review import Review
 from app.models.similar import SimilarGame
 from app.models.summary import GameReviewSummary
+from app.models.youtube import GameYouTubeVideo
 from app.schemas.common import SortField, SortOrder
 from app.schemas.game import GameDetailRead, GameListResponse, GameRead, SimilarGameItemRead
 from app.schemas.summary import GameReviewSummaryRead
+from app.schemas.youtube import (
+    YouTubeLetsPlayRead,
+    YouTubeSummaryRead,
+    YouTubeTranscriptMetadataRead,
+)
 from app.services.game_service import get_game_by_id, get_games
 
 router = APIRouter(prefix="/games", tags=["Games"])
@@ -135,5 +141,48 @@ async def get_game(
     detail.critic_review_count = critic_count
     detail.user_review_count = user_count
     detail.similar_games = similar_items
+
+    # Load YouTube Let's Play video with transcript metadata and AI summary
+    stmt_yt = (
+        select(GameYouTubeVideo)
+        .options(
+            selectinload(GameYouTubeVideo.transcript),
+            selectinload(GameYouTubeVideo.summary),
+        )
+        .where(GameYouTubeVideo.game_id == game_id)
+    )
+    yt_res = await db.execute(stmt_yt)
+    yt_video = yt_res.scalar_one_or_none()
+    if yt_video:
+        transcript_dto = None
+        if yt_video.transcript:
+            transcript_dto = YouTubeTranscriptMetadataRead(
+                language=yt_video.transcript.language,
+                is_generated=yt_video.transcript.is_generated,
+                provider=yt_video.transcript.provider,
+            )
+        summary_dto = None
+        if yt_video.summary:
+            summary_dto = YouTubeSummaryRead(
+                text=yt_video.summary.summary,
+                key_points=yt_video.summary.key_points or [],
+                provider=yt_video.summary.provider,
+                model=yt_video.summary.model,
+                prompt_version=yt_video.summary.prompt_version,
+            )
+        detail.lets_play = YouTubeLetsPlayRead(
+            youtube_video_id=yt_video.youtube_video_id,
+            title=yt_video.title,
+            channel_title=yt_video.channel_title,
+            url=yt_video.url,
+            thumbnail_url=yt_video.thumbnail_url,
+            view_count=yt_video.view_count,
+            duration_seconds=yt_video.duration_seconds,
+            status=yt_video.status,
+            selection_rank=yt_video.selection_rank,
+            selection_reason=yt_video.selection_reason,
+            transcript=transcript_dto,
+            summary=summary_dto,
+        )
 
     return detail

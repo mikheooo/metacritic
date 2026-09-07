@@ -1,4 +1,4 @@
-# Metacritic AI Platform — Hourly Scheduler, Run Now & Realtime Monitoring (Stage 5)
+# Metacritic AI Platform — YouTube Let's Play Discovery, Transcript & AI Summary (Stage 6)
 
 Production-like platform designed to ingest, process, and analyze game data from Metacritic with automated scheduling, AI review insights, embedding similarity, and monitoring.
 
@@ -39,6 +39,16 @@ Production-like platform designed to ingest, process, and analyze game data from
 > - Realtime monitoring API: `GET /api/monitor/status`, `GET /api/monitor/runs`, `GET /api/monitor/runs/{id}`, `GET /api/monitor/stream` (SSE with `Last-Event-ID` cursor reconnection).
 > - Realtime frontend UI (`/monitor`): scheduler status, Celery worker reachability, Run Now trigger, active run progress bar, counters, live SSE event stream timeline, and durable run history.
 > - Dynamic platform filter: `GET /api/platforms` replacing hardcoded platform choices in `GamesPage.tsx`.
+>
+> **Stage 6 Scope**: YouTube Let's Play Discovery, Transcript & AI Summary:
+> - Decoupled YouTube Data API v3 search provider (`YouTubeSearchProvider` Protocol, `YouTubeDataApiProvider`, `FakeYouTubeSearchProvider`).
+> - Strict candidate relevance filtering rejecting trailers, OSTs, reviews, reactions, dev diaries, and shorts, ranked by view count descending.
+> - Transcript acquisition via `youtube-transcript-api` (`TranscriptProvider` Protocol, `YouTubeTranscriptApiProvider`, `FakeTranscriptProvider`) with fallback if top candidate transcript is unavailable.
+> - AI video summarizer with prompt injection defense, structured summary & key points, and bounded transcript chunking.
+> - Database schema: Alembic migration `006_youtube_letsplay.py` adding `game_youtube_videos`, `youtube_transcripts`, `youtube_summaries` tables and `crawl_runs.youtube_processed_count`.
+> - Pipeline integration: Substage E in hourly crawler pipeline, non-fatal failure isolation, SSE events, and Celery tasks (`tasks.enrich_game_youtube`, `tasks.enrich_missing_youtube`).
+> - CLI commands: `python -m app.cli youtube --game-id <id>`, `--missing`, `--all`, `--force`.
+> - API & UI: Game Detail API exposing `lets_play` (excluding raw transcript), React card with thumbnail, channel, duration, view count, transcript badge, AI summary, key points, and "Watch on YouTube" button.
 
 
 
@@ -413,6 +423,81 @@ sim_task = rebuild_similar_games.delay()
 - [x] 96 automated tests passing (scheduler, concurrency, pipeline service, monitor API, SSE stream)
 - [x] Live end-to-end controlled run verification in Docker Compose (17 events captured, 2 games ingested & embedded, similarity rebuilt, 0 duplicate daily ledger entries)
 - [x] Clean Ruff (0 lint errors) and mypy (0 type errors across 57 source files) validation
+
+---
+
+## Current Status: Stage 6 (YouTube Let's Play Discovery, Transcript & AI Summary)
+
+### YouTube Enrichment Architecture
+
+- **Search Provider Abstraction (`YouTubeSearchProvider`)**:
+  - `YouTubeDataApiProvider`: queries official Google YouTube Data API v3 (`GET /youtube/v3/search`, `GET /youtube/v3/videos`) via `httpx.AsyncClient` with video category, duration, view count, and snippet enrichment.
+  - `FakeYouTubeSearchProvider`: deterministic in-memory provider for unit and integration testing without external network or quota consumption.
+  - Query formatting: `"{game.title} gameplay walkthrough let's play"`.
+
+- **Deterministic Candidate Relevance Filter (`evaluate_candidate_relevance`)**:
+  - Case-insensitive negative keyword rejection: filters out trailers, OSTs/soundtracks, video reviews ("Before You Buy", "Review"), reaction videos, dev diaries, and shorts (`#shorts` or duration `< 180s`).
+  - Strict token overlap verification ensuring candidates belong to the specific game title.
+  - Candidate ranking: filtered candidates are sorted by public `view_count DESC`.
+
+- **Transcript Provider (`TranscriptProvider`) & Selection Fallback**:
+  - `YouTubeTranscriptApiProvider`: fetches raw speech transcripts via `youtube-transcript-api` (supporting English and Russian language preferences).
+  - Popularity-ordered fallback algorithm: iterates candidates in descending view count order. If the top-1 candidate lacks an accessible transcript, the service automatically falls back to rank #2, rank #3, etc. If none have accessible transcripts, the top-1 candidate is retained with status `transcript_unavailable`.
+
+- **AI Video Summarizer (`VideoSummarizer`) & Security**:
+  - Prompt injection defense: treats transcripts as untrusted external content with explicit boundary markers and instructions forbidding instruction following within speech text.
+  - Length-bounded transcript chunking: samples beginning, middle, and late-game conclusions for long transcripts to fit comfortably in LLM context windows.
+  - Output contract: structured summary and key bullet points via `OpenRouterVideoSummarizer`.
+  - Cost control: SHA-256 canonical transcript text hashing and compound fingerprinting (`transcript_hash + provider + model + prompt_version + language`) skips expensive LLM calls if the content is unchanged.
+  - Search TTL cache: 24-hour refresh window (`YOUTUBE_SEARCH_REFRESH_HOURS=24`) avoids redundant YouTube API search quota usage.
+
+- **Durable Provenance & Database Schema (Alembic 006)**:
+  - `game_youtube_videos`: 1:1 relation with `games` table with video ID, URL, title, channel info, duration, view/like counts, selection rank, selection reason, and refresh timestamps.
+  - `youtube_transcripts`: 1:1 relation with `game_youtube_videos` with full normalized transcript text, language, is_generated flag, segment count, and SHA-256 text hash.
+  - `youtube_summaries`: 1:1 relation with `game_youtube_videos` storing AI summary, JSON key points, model, prompt version, and token usage metrics.
+  - `crawl_runs.youtube_processed_count`: integer counter added to `crawl_runs` audit table.
+
+- **Pipeline Integration & Failure Isolation**:
+  - Integrated into `MetacriticPipelineService` as downstream Substage E (`stage="youtube"`).
+  - YouTube discovery/transcript/summary failures are non-fatal to core game ingestion, review summaries, and embeddings.
+  - Emits SSE events `youtube_enrichment_completed` and `youtube_enrichment_failed` during live crawler runs.
+
+- **CLI Tooling & Celery Tasks**:
+  - Developer CLI: `python -m app.cli youtube --game-id <id>`, `python -m app.cli youtube --missing`, `python -m app.cli youtube --all`, `python -m app.cli youtube --force`.
+  - Background Celery tasks: `tasks.enrich_game_youtube(game_id, force)` and `tasks.enrich_missing_youtube(limit)`.
+
+- **Frontend Card & API**:
+  - `GET /api/games/{id}` returns `lets_play` object (excluding large raw transcript payload to optimize response size).
+  - Game Detail Page: dedicated **"Popular Let's Play"** card displaying video thumbnail, duration badge, view count, channel name, transcript availability badge, AI summary, key takeaway bullets, and direct "Watch on YouTube" button.
+  - Monitor Page: YouTube stage step and "YouTube Enriched" counter box.
+
+### Configuration Variables (`.env`)
+
+```bash
+YOUTUBE_API_KEY=               # Google YouTube Data API v3 key (controlled skipping when empty)
+YOUTUBE_ENABLED=true           # Master toggle for YouTube enrichment
+YOUTUBE_SEARCH_RESULTS_LIMIT=10# Number of search candidates requested per game
+YOUTUBE_TRANSCRIPT_LANGUAGES=en,ru # Prioritized transcript language codes
+YOUTUBE_SEARCH_REFRESH_HOURS=24# Cache TTL to prevent re-searching recently refreshed games
+YOUTUBE_PROMPT_VERSION=v1      # Version string for AI video summary prompts
+```
+
+### Stage 6 Verification Checklist
+- [x] YouTube Data API v3 search provider with Protocol abstraction (`YouTubeSearchProvider`)
+- [x] Candidate relevance filter rejecting trailers, OSTs, reviews, reactions, dev diaries, and shorts
+- [x] Transcript acquisition via `youtube-transcript-api` with popularity-ordered fallback
+- [x] AI video summarizer with prompt injection defense, structured output, and fingerprint cost control
+- [x] Alembic migration `006_youtube_letsplay.py` applied, tested downgrade (-1) and upgrade (head)
+- [x] Substage E integrated into `MetacriticPipelineService` with non-fatal failure isolation
+- [x] Celery background tasks (`tasks.enrich_game_youtube`, `tasks.enrich_missing_youtube`)
+- [x] Developer CLI commands (`python -m app.cli youtube --game-id`, `--missing`, `--all`, `--force`)
+- [x] REST API `GET /api/games/{id}` exposes sanitized `lets_play` metadata
+- [x] React frontend UI renders "Popular Let's Play" card with AI summary and "Watch on YouTube" link
+- [x] 123 automated tests passing in Docker Compose (100% test pass rate)
+- [x] Zero Ruff lint errors, zero format issues, zero mypy type issues (66 source files)
+- [x] Frontend TypeScript build succeeds with 0 errors
+- [x] Secret audit clean (no API keys hardcoded or committed in git)
+
 
 
 

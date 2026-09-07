@@ -74,6 +74,36 @@ export interface GameDetail extends Game {
   critic_review_count?: number;
   user_review_count?: number;
   similar_games?: SimilarGameItem[];
+  lets_play?: YouTubeLetsPlayDetail | null;
+}
+
+export interface YouTubeTranscriptDetail {
+  language: string;
+  is_generated: boolean;
+  provider: string;
+}
+
+export interface YouTubeSummaryDetail {
+  text: string;
+  key_points: string[];
+  provider: string;
+  model: string;
+  prompt_version: string;
+}
+
+export interface YouTubeLetsPlayDetail {
+  youtube_video_id: string;
+  title: string;
+  channel_title: string | null;
+  url: string;
+  thumbnail_url: string | null;
+  view_count: number | null;
+  duration_seconds: number | null;
+  status: string;
+  selection_rank: number;
+  selection_reason: string;
+  transcript?: YouTubeTranscriptDetail | null;
+  summary?: YouTubeSummaryDetail | null;
 }
 
 
@@ -102,6 +132,7 @@ export type PipelineStage =
   | 'reviews'
   | 'summarizing'
   | 'embedding'
+  | 'youtube'
   | 'similarity'
   | 'completed'
   | 'partial'
@@ -132,6 +163,7 @@ export interface CrawlRun {
   reviews_processed_count: number;
   summaries_generated_count: number;
   embeddings_generated_count: number;
+  youtube_processed_count?: number;
   current_stage: PipelineStage | null;
   current_game_id: number | null;
   current_game_title: string | null;

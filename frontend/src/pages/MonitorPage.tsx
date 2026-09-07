@@ -170,6 +170,7 @@ export const MonitorPage: React.FC = () => {
     'reviews' as PipelineStage,
     'summarizing' as PipelineStage,
     'embedding' as PipelineStage,
+    'youtube' as PipelineStage,
     'similarity' as PipelineStage,
   ];
 
@@ -446,6 +447,12 @@ export const MonitorPage: React.FC = () => {
                 <span className="counter-label">Embeddings</span>
                 <span className="counter-value">
                   {currentDisplayRun.embeddings_generated_count}
+                </span>
+              </div>
+              <div className="counter-box">
+                <span className="counter-label">YouTube Enriched</span>
+                <span className="counter-value">
+                  {currentDisplayRun.youtube_processed_count ?? 0}
                 </span>
               </div>
             </div>

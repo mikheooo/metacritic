@@ -39,10 +39,11 @@ class CrawlRun(Base):
     reviews_processed_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     summaries_generated_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     embeddings_generated_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    youtube_processed_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     current_stage: Mapped[str | None] = mapped_column(
         String(50), nullable=True
-    )  # queued, discovering, ingesting, reviews, summarizing, embedding, similarity, completed, partial, failed
+    )  # queued, discovering, ingesting, reviews, summarizing, embedding, youtube, similarity, completed, partial, failed
     current_game_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("games.id", ondelete="SET NULL"),

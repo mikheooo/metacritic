@@ -97,8 +97,29 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
 
-    # Future External Integration Keys
+    # YouTube Integration Settings
     YOUTUBE_API_KEY: str | None = None
+    YOUTUBE_ENABLED: bool = True
+    YOUTUBE_SEARCH_RESULTS_LIMIT: int = 10
+    YOUTUBE_TRANSCRIPT_LANGUAGES: list[str] = ["en", "ru"]
+    YOUTUBE_SEARCH_REFRESH_HOURS: int = 24
+    YOUTUBE_PROMPT_VERSION: str = "v1"
+
+    @field_validator("YOUTUBE_TRANSCRIPT_LANGUAGES", mode="before")
+    @classmethod
+    def assemble_transcript_languages(cls, v: object) -> list[str]:
+        if isinstance(v, str):
+            if v.startswith("[") and v.endswith("]"):
+                import json
+
+                try:
+                    return json.loads(v)  # type: ignore[no-any-return]
+                except Exception:
+                    pass
+            return [i.strip() for i in v.split(",") if i.strip()]
+        elif isinstance(v, list):
+            return [str(i).strip() for i in v if str(i).strip()]
+        return ["en", "ru"]
 
 
 settings = Settings()

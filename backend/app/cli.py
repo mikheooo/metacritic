@@ -178,6 +178,67 @@ async def run_similarity_command(
     print("===================================")
 
 
+async def run_youtube_command(
+    game_id: int | None,
+    missing: bool,
+    all_games: bool,
+    force: bool,
+) -> None:
+    from sqlalchemy import select
+
+    from app.models.game import Game
+    from app.models.youtube import GameYouTubeVideo
+    from app.services.youtube import YouTubeEnrichmentService
+
+    print("=== YOUTUBE LET'S PLAY ENRICHMENT ===")
+    async with AsyncSessionLocal() as session:
+        service = YouTubeEnrichmentService(db=session)
+
+        target_ids: list[int] = []
+        if game_id is not None:
+            target_ids = [game_id]
+        elif missing:
+            stmt = (
+                select(Game.id)
+                .outerjoin(GameYouTubeVideo, Game.id == GameYouTubeVideo.game_id)
+                .where(GameYouTubeVideo.id.is_(None))
+                .order_by(Game.id.asc())
+            )
+            res = await session.execute(stmt)
+            target_ids = list(res.scalars().all())
+            print(f"Found {len(target_ids)} games missing YouTube data.")
+        elif all_games:
+            stmt = select(Game.id).order_by(Game.id.asc())
+            res = await session.execute(stmt)
+            target_ids = list(res.scalars().all())
+            print(f"Found {len(target_ids)} total games.")
+        else:
+            # Pick first game
+            stmt = select(Game.id).order_by(Game.id.asc()).limit(1)
+            res = await session.execute(stmt)
+            first_id = res.scalar_one_or_none()
+            if first_id is not None:
+                target_ids = [first_id]
+            else:
+                print("Error: No games found in database. Run crawl first.")
+                return
+
+        for gid in target_ids:
+            res_item = await service.enrich_game(game_id=gid, force=force)
+            print(
+                f"Game #{gid}: status={res_item.status}, video_id={res_item.video_id}, rank={res_item.selection_rank}"
+            )
+            if res_item.selection_reason:
+                print(f"  Reason: {res_item.selection_reason}")
+            if res_item.transcript_status:
+                print(f"  Transcript: {res_item.transcript_status}")
+            if res_item.summary_status:
+                print(f"  Summary: {res_item.summary_status}")
+            if res_item.error:
+                print(f"  Error: {res_item.error}")
+    print("=====================================")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Metacritic AI Platform CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -262,6 +323,32 @@ def main() -> None:
         help="Maximum similar games to retrieve per game (default: 5)",
     )
 
+    youtube_parser = subparsers.add_parser(
+        "youtube", help="Discover and summarize YouTube Let's Plays"
+    )
+    youtube_parser.add_argument(
+        "--game-id",
+        type=int,
+        default=None,
+        help="Specific game ID to enrich with YouTube Let's Play",
+    )
+    youtube_parser.add_argument(
+        "--missing",
+        action="store_true",
+        help="Enrich all games missing YouTube Let's Play data",
+    )
+    youtube_parser.add_argument(
+        "--all",
+        action="store_true",
+        dest="all_games",
+        help="Enrich all games in catalog",
+    )
+    youtube_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force search and regeneration even if fresh or unchanged",
+    )
+
     args = parser.parse_args()
 
     if args.command == "crawl":
@@ -280,6 +367,15 @@ def main() -> None:
         asyncio.run(
             run_similarity_command(
                 game_id=args.game_id, rebuild_all=args.rebuild_all, limit=args.limit
+            )
+        )
+    elif args.command == "youtube":
+        asyncio.run(
+            run_youtube_command(
+                game_id=args.game_id,
+                missing=args.missing,
+                all_games=args.all_games,
+                force=args.force,
             )
         )
     else:

@@ -12,6 +12,7 @@ class PipelineStage(StrEnum):
     REVIEWS = "reviews"
     SUMMARIZING = "summarizing"
     EMBEDDING = "embedding"
+    YOUTUBE = "youtube"
     SIMILARITY = "similarity"
     COMPLETED = "completed"
     PARTIAL = "partial"
@@ -51,6 +52,7 @@ class CrawlRunRead(BaseModel):
     reviews_processed_count: int
     summaries_generated_count: int
     embeddings_generated_count: int
+    youtube_processed_count: int = 0
     current_stage: str | None = None
     current_game_id: int | None = None
     current_game_title: str | None = None

@@ -59,6 +59,21 @@ export const GameDetailPage: React.FC = () => {
   const userReviews = game.reviews.filter((r) => r.review_type === 'user');
   const displayedReviews = activeTab === 'critic' ? criticReviews : userReviews;
 
+  const formatDuration = (seconds?: number | null): string | null => {
+    if (!seconds) return null;
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+  };
+
+  const formatViews = (views?: number | null): string | null => {
+    if (views === null || views === undefined) return null;
+    if (views >= 1_000_000) return `${(views / 1_000_000).toFixed(1)}M views`;
+    if (views >= 1_000) return `${(views / 1_000).toFixed(1)}K views`;
+    return `${views} views`;
+  };
+
   return (
     <div className="detail-page">
       <Link to="/" className="back-btn">
@@ -345,6 +360,179 @@ export const GameDetailPage: React.FC = () => {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Popular Let's Play Section */}
+      <div className="section-card" style={{ marginBottom: '2rem' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            marginBottom: '1.25rem',
+            borderBottom: '1px solid var(--border-color)',
+            paddingBottom: '0.75rem',
+          }}
+        >
+          <span style={{ fontSize: '1.25rem' }}>📺</span>
+          <h3 className="section-title" style={{ margin: 0 }}>
+            Popular Let's Play
+          </h3>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+            YouTube Data API v3 & Speech AI Summary
+          </span>
+        </div>
+
+        {!game.lets_play ? (
+          <p style={{ color: 'var(--text-muted)', fontStyle: 'italic', padding: '1rem 0' }}>
+            Let's Play analysis is not available yet.
+          </p>
+        ) : (
+          <div>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                gap: '1.5rem',
+                backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '8px',
+                padding: '1.25rem',
+              }}
+            >
+              {/* Thumbnail Container */}
+              <div
+                style={{
+                  position: 'relative',
+                  width: '320px',
+                  maxWidth: '100%',
+                  flexShrink: 0,
+                  borderRadius: '6px',
+                  overflow: 'hidden',
+                  backgroundColor: '#000',
+                  aspectRatio: '16/9',
+                }}
+              >
+                {game.lets_play.thumbnail_url ? (
+                  <img
+                    src={game.lets_play.thumbnail_url}
+                    alt={game.lets_play.title}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--text-muted)',
+                    }}
+                  >
+                    No Thumbnail
+                  </div>
+                )}
+                {game.lets_play.duration_seconds && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      bottom: '8px',
+                      right: '8px',
+                      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                      color: '#fff',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                    }}
+                  >
+                    {formatDuration(game.lets_play.duration_seconds)}
+                  </span>
+                )}
+              </div>
+
+              {/* Metadata & Actions */}
+              <div style={{ flex: 1, minWidth: '260px', display: 'flex', flexDirection: 'column' }}>
+                <h4 style={{ fontSize: '1.1rem', fontWeight: 600, margin: '0 0 0.5rem 0', lineHeight: 1.4 }}>
+                  {game.lets_play.title}
+                </h4>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  {game.lets_play.channel_title && (
+                    <span>By <strong>{game.lets_play.channel_title}</strong></span>
+                  )}
+                  {game.lets_play.view_count !== null && (
+                    <span>• {formatViews(game.lets_play.view_count)}</span>
+                  )}
+                  {game.lets_play.transcript && (
+                    <span
+                      style={{
+                        backgroundColor: game.lets_play.transcript.is_generated ? 'rgba(59, 130, 246, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                        color: game.lets_play.transcript.is_generated ? '#60a5fa' : '#34d399',
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {game.lets_play.transcript.is_generated ? 'Auto-generated transcript' : 'Manual captions'} ({game.lets_play.transcript.language.toUpperCase()})
+                    </span>
+                  )}
+                </div>
+
+                {/* AI Summary or Unavailable Notice */}
+                {game.lets_play.summary ? (
+                  <div style={{ marginTop: '0.5rem' }}>
+                    <p style={{ fontSize: '0.95rem', lineHeight: 1.6, color: 'var(--text-primary)', marginBottom: '0.75rem' }}>
+                      {game.lets_play.summary.text}
+                    </p>
+                    {game.lets_play.summary.key_points && game.lets_play.summary.key_points.length > 0 && (
+                      <div style={{ marginBottom: '1rem' }}>
+                        <strong style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          Key Playthrough Highlights
+                        </strong>
+                        <ul style={{ margin: '0.5rem 0 0 0', paddingLeft: '1.25rem', fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                          {game.lets_play.summary.key_points.map((pt, idx) => (
+                            <li key={idx} style={{ marginBottom: '0.25rem' }}>{pt}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p style={{ color: 'var(--text-muted)', fontStyle: 'italic', margin: '0.75rem 0' }}>
+                    Let's Play found, but a transcript is not available.
+                  </p>
+                )}
+
+                {/* Watch Button */}
+                <div style={{ marginTop: 'auto', paddingTop: '0.75rem' }}>
+                  <a
+                    href={game.lets_play.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      backgroundColor: '#ef4444',
+                      color: '#fff',
+                      padding: '0.5rem 1rem',
+                      borderRadius: '6px',
+                      textDecoration: 'none',
+                      fontWeight: 600,
+                      fontSize: '0.85rem',
+                      transition: 'background-color 0.2s ease',
+                    }}
+                  >
+                    ▶ Watch on YouTube
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Similar Games Section */}
