@@ -4,6 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.core.config import settings
 from app.schemas.health import HealthResponse, ReadyResponse
 
 router = APIRouter(tags=["Health & Readiness"])
@@ -39,7 +40,8 @@ async def readiness_check(
             content={"status": "ready", "database": "connected", "error": None},
         )
     except Exception as exc:
+        err_detail = str(exc) if settings.DEBUG else "Database connectivity check failed"
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"status": "not ready", "database": "disconnected", "error": str(exc)},
+            content={"status": "not ready", "database": "disconnected", "error": err_detail},
         )

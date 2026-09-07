@@ -1,4 +1,5 @@
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
 import redis.asyncio as aioredis
@@ -73,7 +74,35 @@ async def trigger_run_now(
             "Could not check Redis lock status directly (%s); proceeding with DB guard", exc
         )
 
-    # 3. Create pending CrawlRun and initial event
+    # 3. Check cooldown rate limiting window since last run finished
+    if settings.MANUAL_RUN_COOLDOWN_SECONDS > 0:
+        stmt_last = (
+            select(CrawlRun.finished_at)
+            .where(CrawlRun.finished_at.isnot(None))
+            .order_by(CrawlRun.id.desc())
+            .limit(1)
+        )
+        res_last = await db.execute(stmt_last)
+        last_finished_at = res_last.scalar_one_or_none()
+        if last_finished_at:
+            if last_finished_at.tzinfo is None:
+                last_finished_at = last_finished_at.replace(tzinfo=UTC)
+            now = datetime.now(UTC)
+            elapsed = (now - last_finished_at).total_seconds()
+            if elapsed < settings.MANUAL_RUN_COOLDOWN_SECONDS:
+                remaining = int(settings.MANUAL_RUN_COOLDOWN_SECONDS - elapsed)
+                logger.warning(
+                    "Rejecting manual run: cooldown active (%d seconds remaining)", remaining
+                )
+                return JSONResponse(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    content={
+                        "detail": f"Manual runs are on cooldown. Please wait {remaining} seconds before triggering again.",
+                        "retry_after_seconds": remaining,
+                    },
+                )
+
+    # 4. Create pending CrawlRun and initial event
     run = CrawlRun(
         status="pending",
         trigger_type="manual",

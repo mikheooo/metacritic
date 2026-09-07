@@ -3,9 +3,15 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exception_handlers import (
+    http_exception_handler,
+    request_validation_exception_handler,
+)
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.v1.api import api_router
 from app.api.v1.endpoints import health
@@ -30,9 +36,32 @@ app = FastAPI(
     version="0.1.0",
     description="Production-like foundation for Metacritic ingestion, game analysis, and monitoring.",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if settings.DEBUG else None,
+    redoc_url="/redoc" if settings.DEBUG else None,
 )
+
+
+# Unhandled server exception safety handler
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception) -> Response:
+    if isinstance(exc, StarletteHTTPException):
+        return await http_exception_handler(request, exc)
+    if isinstance(exc, RequestValidationError):
+        return await request_validation_exception_handler(request, exc)
+
+    logger.exception(
+        "Unhandled server exception during %s %s: %s", request.method, request.url.path, exc
+    )
+    if settings.DEBUG:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error", "debug_error": str(exc)},
+        )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
 
 # CORS configuration
 app.add_middleware(

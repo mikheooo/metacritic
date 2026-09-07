@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     CRAWLER_RATE_LIMIT_DELAY: float = 0.5
     CRAWLER_TIMEOUT: float = 15.0
     CRAWLER_LOCK_TIMEOUT: int = 600
+    MANUAL_RUN_COOLDOWN_SECONDS: int = 60
 
     # Scheduler & Celery Settings
     CRAWL_SCHEDULE_ENABLED: bool = True
@@ -56,7 +57,12 @@ class Settings(BaseSettings):
             return [i.strip() for i in v.split(",") if i.strip()]
         elif isinstance(v, list):
             return [str(i) for i in v]
-        return ["*"]
+        return [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+        ]
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/metacritic"

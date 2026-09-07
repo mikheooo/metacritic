@@ -44,10 +44,11 @@ services:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/metacritic
       - DATABASE_SYNC_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/metacritic
       - REDIS_URL=redis://redis:6379/0
-      - ENVIRONMENT=development
-      - DEBUG=true
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - DEBUG=${DEBUG:-false}
       - CRAWL_SCHEDULE_ENABLED=true
       - CRAWL_BATCH_LIMIT=20
+      - MANUAL_RUN_COOLDOWN_SECONDS=${MANUAL_RUN_COOLDOWN_SECONDS:-60}
       - CELERY_TIMEZONE=UTC
       - CRAWL_SCHEDULE_MINUTE=0
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
@@ -56,6 +57,8 @@ services:
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
       - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
       - LLM_MODEL=${LLM_MODEL:-openai/gpt-4o-mini}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openrouter}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-openai/text-embedding-3-small}
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-}
       - YOUTUBE_ENABLED=${YOUTUBE_ENABLED:-true}
       - YOUTUBE_SEARCH_RESULTS_LIMIT=${YOUTUBE_SEARCH_RESULTS_LIMIT:-10}
@@ -86,8 +89,11 @@ services:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/metacritic
       - DATABASE_SYNC_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/metacritic
       - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - DEBUG=${DEBUG:-false}
       - CRAWL_SCHEDULE_ENABLED=true
       - CRAWL_BATCH_LIMIT=20
+      - MANUAL_RUN_COOLDOWN_SECONDS=${MANUAL_RUN_COOLDOWN_SECONDS:-60}
       - CELERY_TIMEZONE=UTC
       - CRAWL_SCHEDULE_MINUTE=0
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
@@ -96,6 +102,8 @@ services:
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
       - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
       - LLM_MODEL=${LLM_MODEL:-openai/gpt-4o-mini}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openrouter}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-openai/text-embedding-3-small}
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-}
       - YOUTUBE_ENABLED=${YOUTUBE_ENABLED:-true}
       - YOUTUBE_SEARCH_RESULTS_LIMIT=${YOUTUBE_SEARCH_RESULTS_LIMIT:-10}
@@ -124,7 +132,8 @@ services:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/metacritic
       - DATABASE_SYNC_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/metacritic
       - REDIS_URL=redis://redis:6379/0
-      - ENVIRONMENT=development
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - DEBUG=${DEBUG:-false}
       - CRAWL_SCHEDULE_ENABLED=true
       - CRAWL_BATCH_LIMIT=20
       - CELERY_TIMEZONE=UTC
@@ -135,6 +144,8 @@ services:
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
       - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
       - LLM_MODEL=${LLM_MODEL:-openai/gpt-4o-mini}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openrouter}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-openai/text-embedding-3-small}
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-}
       - YOUTUBE_ENABLED=${YOUTUBE_ENABLED:-true}
       - YOUTUBE_SEARCH_RESULTS_LIMIT=${YOUTUBE_SEARCH_RESULTS_LIMIT:-10}
@@ -160,6 +171,14 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: metacritic-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://frontend:80
+    depends_on:
+      - frontend
 
 volumes:
   postgres_data:
