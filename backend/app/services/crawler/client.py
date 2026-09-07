@@ -8,6 +8,7 @@ from app.services.crawler.dtos import (
     BrowsePage,
     GameCandidate,
     GameDetails,
+    ReviewPage,
     normalize_canonical_url,
 )
 from app.services.crawler.parser import MetacriticParser
@@ -126,3 +127,34 @@ class MetacriticClient:
         canonical_url = normalize_canonical_url(url)
         html = await self._fetch(canonical_url)
         return MetacriticParser.parse_game_details(html, canonical_url=canonical_url)
+
+    async def get_critic_reviews(
+        self, slug: str, page: int = 1, platform: str | None = None
+    ) -> ReviewPage:
+        """Fetch critic reviews for a given game slug."""
+        url = f"{self.base_url}/game/{slug}/critic-reviews/"
+        params: list[str] = []
+        if platform:
+            params.append(f"platform={platform}")
+        if page > 1:
+            params.append(f"page={page}")
+        if params:
+            url = f"{url}?{'&'.join(params)}"
+        html = await self._fetch(url)
+        return MetacriticParser.parse_critic_reviews(html, game_slug=slug, page=page)
+
+    async def get_user_reviews(
+        self, slug: str, page: int = 1, platform: str | None = None
+    ) -> ReviewPage:
+        """Fetch user reviews for a given game slug."""
+        url = f"{self.base_url}/game/{slug}/user-reviews/"
+        params: list[str] = []
+        if platform:
+            params.append(f"platform={platform}")
+        if page > 1:
+            params.append(f"page={page}")
+        if params:
+            url = f"{url}?{'&'.join(params)}"
+        html = await self._fetch(url)
+        return MetacriticParser.parse_user_reviews(html, game_slug=slug, page=page)
+

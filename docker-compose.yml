@@ -46,6 +46,9 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - ENVIRONMENT=development
       - DEBUG=true
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,6 +74,9 @@ services:
       - DATABASE_SYNC_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/metacritic
       - REDIS_URL=redis://redis:6379/0
       - ENVIRONMENT=development
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
     depends_on:
       postgres:
         condition: service_healthy

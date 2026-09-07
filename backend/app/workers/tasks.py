@@ -13,6 +13,14 @@ logger = logging.getLogger(__name__)
 
 def _run_async_safely[T](coro: Coroutine[Any, Any, T]) -> T:
     """Run an async coroutine safely from sync Celery worker or running event loops."""
+    async def _wrapper() -> T:
+        try:
+            return await coro
+        finally:
+            from app.db.session import async_engine
+
+            await async_engine.dispose()
+
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
@@ -20,8 +28,9 @@ def _run_async_safely[T](coro: Coroutine[Any, Any, T]) -> T:
 
     if loop and loop.is_running():
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            return cast(T, executor.submit(asyncio.run, coro).result())
-    return asyncio.run(coro)
+            return cast(T, executor.submit(asyncio.run, _wrapper()).result())
+    return asyncio.run(_wrapper())
+
 
 
 @celery_app.task(name="tasks.ping")
@@ -67,5 +76,80 @@ def process_metacritic_batch(
                 "errors": result.errors,
                 "dry_run": result.dry_run,
             }
+
+    return _run_async_safely(_execute())
+
+
+@celery_app.task(name="tasks.enrich_game_reviews")
+def enrich_game_reviews(game_id: int) -> dict[str, Any]:
+    """
+    Celery task to ingest reviews and generate AI summaries for a specific game.
+    """
+    logger.info("Starting review enrichment task for game_id=%d", game_id)
+
+    async def _execute() -> dict[str, Any]:
+        from app.services.ai import ReviewEnrichmentService
+
+        async with AsyncSessionLocal() as db_session:
+            service = ReviewEnrichmentService(db=db_session)
+            res = await service.enrich_and_summarize(game_id=game_id)
+            return {
+                "game_id": res.game_id,
+                "critic_reviews_ingested": res.critic_reviews_ingested,
+                "user_reviews_ingested": res.user_reviews_ingested,
+                "critic_summary_status": res.critic_summary_status,
+                "user_summary_status": res.user_summary_status,
+                "critic_summary_id": res.critic_summary_id,
+                "user_summary_id": res.user_summary_id,
+                "errors": res.errors,
+            }
+
+    return _run_async_safely(_execute())
+
+
+@celery_app.task(name="tasks.summarize_game_reviews")
+def summarize_game_reviews(game_id: int, review_type: str = "both") -> dict[str, Any]:
+    """
+    Celery task to summarize reviews (without re-ingesting) for a specific game.
+    review_type: "critic", "user", or "both".
+    """
+    logger.info("Starting review summarization task for game_id=%d, type=%s", game_id, review_type)
+
+    async def _execute() -> dict[str, Any]:
+        from sqlalchemy import select
+
+        from app.models.game import Game
+        from app.services.ai import ReviewEnrichmentService
+
+        async with AsyncSessionLocal() as db_session:
+            stmt = select(Game).where(Game.id == game_id)
+            game_res = await db_session.execute(stmt)
+            game = game_res.scalar_one_or_none()
+            if not game:
+                raise ValueError(f"Game {game_id} not found")
+
+            service = ReviewEnrichmentService(db=db_session)
+            results = {}
+
+            if review_type in ("critic", "both"):
+                c_res = await service.summarize_game_reviews(game, "critic")
+                results["critic"] = {
+                    "status": c_res.status,
+                    "summary_id": c_res.summary_id,
+                    "fingerprint": c_res.input_fingerprint,
+                    "error": c_res.error,
+                }
+
+            if review_type in ("user", "both"):
+                u_res = await service.summarize_game_reviews(game, "user")
+                results["user"] = {
+                    "status": u_res.status,
+                    "summary_id": u_res.summary_id,
+                    "fingerprint": u_res.input_fingerprint,
+                    "error": u_res.error,
+                }
+
+            await db_session.commit()
+            return {"game_id": game_id, "results": results}
 
     return _run_async_safely(_execute())

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.clock import FixedClock, reset_clock, set_clock
 from app.models.crawl import CrawlRun, DailyGameProcessing
 from app.models.game import Game
-from app.services.crawler.dtos import GameCandidate, GameDetails, PlatformScore
+from app.services.crawler.dtos import BrowsePage, GameCandidate, GameDetails, PlatformScore
 from app.services.crawler.ingestion_service import IngestionService
 from app.workers.tasks import process_metacritic_batch
 
@@ -85,11 +85,13 @@ async def test_celery_task_integration(db_session: AsyncSession) -> None:
     with patch(
         "app.services.crawler.ingestion_service.MetacriticClient.get_new_releases"
     ) as mock_nr, patch(
+        "app.services.crawler.ingestion_service.MetacriticClient.get_browse_page"
+    ) as mock_bp, patch(
         "app.services.crawler.ingestion_service.MetacriticClient.get_game_details"
     ) as mock_details:
-        mock_nr.return_value = [
-            GameCandidate("Task Game", "https://www.metacritic.com/game/task-game/", "task-game")
-        ]
+        cand = GameCandidate("Task Game", "https://www.metacritic.com/game/task-game/", "task-game")
+        mock_nr.return_value = [cand]
+        mock_bp.return_value = BrowsePage(candidates=[cand], page=1, has_next=False)
         mock_details.return_value = GameDetails(
             external_id="task-game",
             metacritic_url="https://www.metacritic.com/game/task-game/",
@@ -102,3 +104,4 @@ async def test_celery_task_integration(db_session: AsyncSession) -> None:
         assert res["dry_run"] is True
         assert res["eligible_count"] == 1
         assert "Task Game" in res["candidates"]
+

@@ -1,13 +1,18 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.models.review import Review
+from app.models.summary import GameReviewSummary
 from app.schemas.common import SortField, SortOrder
 from app.schemas.game import GameDetailRead, GameListResponse, GameRead
+from app.schemas.summary import GameReviewSummaryRead
 from app.services.game_service import get_game_by_id, get_games
 
 router = APIRouter(prefix="/games", tags=["Games"])
+
 
 
 @router.get(
@@ -47,7 +52,7 @@ async def list_games(
     "/{game_id}",
     response_model=GameDetailRead,
     summary="Get Game Details",
-    description="Retrieve detailed game card including platform scores and reviews.",
+    description="Retrieve detailed game card including platform scores, reviews, and structured AI summaries.",
 )
 async def get_game(
     game_id: int,
@@ -59,4 +64,33 @@ async def get_game(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Game with id {game_id} not found",
         )
-    return GameDetailRead.model_validate(game)
+
+    stmt_sums = select(GameReviewSummary).where(GameReviewSummary.game_id == game_id)
+    sums_res = await db.execute(stmt_sums)
+    all_sums = list(sums_res.scalars().all())
+
+    critic_sum = None
+    user_sum = None
+    for s in all_sums:
+        if s.review_type == "critic":
+            critic_sum = s
+        elif s.review_type == "user":
+            user_sum = s
+
+
+    stmt_c = select(func.count(Review.id)).where(Review.game_id == game_id, Review.review_type == "critic")
+    stmt_u = select(func.count(Review.id)).where(Review.game_id == game_id, Review.review_type == "user")
+    critic_count = await db.scalar(stmt_c) or 0
+    user_count = await db.scalar(stmt_u) or 0
+
+    detail = GameDetailRead.model_validate(game)
+    if critic_sum:
+        detail.critic_summary_detail = GameReviewSummaryRead.model_validate(critic_sum)
+    if user_sum:
+        detail.user_summary_detail = GameReviewSummaryRead.model_validate(user_sum)
+    detail.critic_review_count = critic_count
+    detail.user_review_count = user_count
+
+
+    return detail
+

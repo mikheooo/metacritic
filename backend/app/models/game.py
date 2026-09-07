@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from app.models.platform import GamePlatform
     from app.models.review import Review
     from app.models.similar import SimilarGame
+    from app.models.summary import GameReviewSummary
 
 
 class Game(Base):
@@ -53,6 +54,12 @@ class Game(Base):
     )
     reviews: Mapped[list["Review"]] = relationship(
         "Review",
+        back_populates="game",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    review_summaries: Mapped[list["GameReviewSummary"]] = relationship(
+        "GameReviewSummary",
         back_populates="game",
         cascade="all, delete-orphan",
         lazy="selectin",

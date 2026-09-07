@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import re
@@ -10,6 +11,8 @@ from app.services.crawler.dtos import (
     GameCandidate,
     GameDetails,
     PlatformScore,
+    ReviewItem,
+    ReviewPage,
     extract_canonical_slug,
     normalize_canonical_url,
 )
@@ -359,3 +362,139 @@ class MetacriticParser:
             trailer_url=trailer_url,
             platforms=list(platforms_dict.values()),
         )
+
+    @staticmethod
+    def _parse_reviews_page(
+        html: str,
+        game_slug: str,
+        review_type: str,  # "critic" or "user"
+        page: int = 1,
+    ) -> ReviewPage:
+        from app.services.ai.sampling import classify_sentiment
+
+        soup = BeautifulSoup(html, "html.parser")
+        cards = _find_all_by_testid(soup, "review-card")
+        if not cards:
+            cards = list(soup.find_all(class_=re.compile(r"c-siteReview|c-reviewCard", re.I)))
+
+        reviews: list[ReviewItem] = []
+        for card in cards:
+            # 1. Date
+            date_elem = _find_by_testid(card, "review-card-date") or card.find(class_=re.compile(r"c-siteReviewHeader_publicationDate|date", re.I))
+            published_at = _clean_text(date_elem.get_text()) if date_elem else None
+
+            # 2. Header / Author / Score
+            header_elem = _find_by_testid(card, "review-card-header") or card.find(class_=re.compile(r"c-siteReviewHeader", re.I))
+
+            score: float | None = None
+            score_elem = card.find(class_=re.compile(r"c-siteReviewScore")) or card.find(attrs={"aria-label": re.compile(r"score", re.I)})
+            if score_elem:
+                aria_lbl = _get_attr(score_elem, "aria-label") or ""
+                match_aria = re.search(r"(\d+(?:\.\d+)?)\s+out\s+of", aria_lbl)
+                if match_aria:
+                    try:
+                        score = float(match_aria.group(1))
+                    except ValueError:
+                        score = None
+                else:
+                    span_score = score_elem.find("span")
+                    score_val = span_score.get_text().strip() if span_score else score_elem.get_text().strip()
+                    score = _parse_score_float(score_val)
+
+            # Author name (strip score text from header if present)
+            author: str | None = None
+            if header_elem:
+                h_clone = BeautifulSoup(str(header_elem), "html.parser")
+                for s_badge in h_clone.find_all(class_=re.compile(r"c-siteReviewScore")):
+                    s_badge.decompose()
+                author = _clean_text(h_clone.get_text())
+
+            # 3. Body
+            quote_elem = (
+                _find_by_testid(card, "review-quote-text")
+                or _find_by_testid(card, "review-card-quote-block")
+                or card.find(class_=re.compile(r"c-siteReview_quote|quote", re.I))
+            )
+            body = ""
+            if quote_elem:
+                q_clone = BeautifulSoup(str(quote_elem), "html.parser")
+                for rm in _find_all_by_testid(q_clone, "review-quote-read-more"):
+                    rm.decompose()
+                for rm in q_clone.find_all(class_=re.compile(r"read-more", re.I)):
+                    rm.decompose()
+                body = _clean_text(q_clone.get_text()) or ""
+
+
+            # 4. Platform
+            platform_elem = _find_by_testid(card, "review-platform") or card.find(class_=re.compile(r"platform", re.I))
+            platform_name = _clean_text(platform_elem.get_text()) if platform_elem else None
+            platform_slug = platform_name.lower().replace(" ", "-") if platform_name else None
+
+            # 5. Full review link (critic)
+            source_url = None
+            if review_type == "critic":
+                full_link_elem = _find_by_testid(card, "review-full-review-link") or card.find("a", href=re.compile(r"^https?://"))
+                if full_link_elem:
+                    source_url = _get_attr(full_link_elem, "href")
+
+            # 6. Sentiment category
+            sentiment = classify_sentiment(score, review_type)
+
+            # 7. Content hash and external id
+            raw_hash_input = f"{game_slug}:{review_type}:{platform_slug or ''}:{author or ''}:{published_at or ''}:{body}"
+            content_hash = hashlib.sha256(raw_hash_input.encode("utf-8")).hexdigest()
+            external_id = f"{review_type}-{content_hash[:16]}"
+
+            reviews.append(
+                ReviewItem(
+                    external_id=external_id,
+                    review_type=review_type,
+                    author=author,
+                    score=score,
+                    body=body,
+                    published_at=published_at,
+                    platform_slug=platform_slug,
+                    source_url=source_url,
+                    sentiment_category=sentiment,
+                    content_hash=content_hash,
+                )
+            )
+
+        # 8. Pagination detection
+        next_elem = (
+            _find_by_testid(soup, "pagination-next")
+            or soup.find(class_=re.compile(r"pagination.*next", re.I))
+            or soup.find("a", href=re.compile(rf"[?&]page={page + 1}"))
+        )
+        has_next_page = bool(next_elem)
+
+        total_pages = None
+        pag_links = soup.find_all("a", href=re.compile(r"[?&]page=(\d+)"))
+        if pag_links:
+            page_nums: list[int] = []
+            for pl in pag_links:
+                m = re.search(r"[?&]page=(\d+)", _get_attr(pl, "href") or "")
+                if m:
+                    try:
+                        page_nums.append(int(m.group(1)))
+                    except ValueError:
+                        pass
+            if page_nums:
+                total_pages = max(page_nums)
+
+        return ReviewPage(
+            reviews=reviews,
+            current_page=page,
+            has_next_page=has_next_page,
+            total_pages=total_pages,
+        )
+
+    @staticmethod
+    def parse_critic_reviews(html: str, game_slug: str, page: int = 1) -> ReviewPage:
+        return MetacriticParser._parse_reviews_page(html, game_slug=game_slug, review_type="critic", page=page)
+
+    @staticmethod
+    def parse_user_reviews(html: str, game_slug: str, page: int = 1) -> ReviewPage:
+        return MetacriticParser._parse_reviews_page(html, game_slug=game_slug, review_type="user", page=page)
+
+

@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     CRAWLER_TIMEOUT: float = 15.0
     CRAWLER_LOCK_TIMEOUT: int = 600
 
+    # Review Ingestion & Sampling Settings
+    CRITIC_REVIEW_MAX_ITEMS: int = 50
+    USER_REVIEW_MAX_ITEMS: int = 100
+    SUMMARY_SAMPLE_SIZE: int = 20
+
     # CORS
     CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
@@ -65,8 +70,14 @@ class Settings(BaseSettings):
     # Redis & Celery
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    # Future AI & External Integration Keys (optional / documented placeholders)
+    # AI & LLM Summarization Settings
     OPENAI_API_KEY: str | None = None
+    LLM_PROVIDER: str = "openai"
+    LLM_MODEL: str = "gpt-4o-mini"
+    SUMMARY_LANGUAGE: str = "en"
+    SUMMARY_PROMPT_VERSION: str = "v1"
+
+    # Future External Integration Keys
     YOUTUBE_API_KEY: str | None = None
 
 

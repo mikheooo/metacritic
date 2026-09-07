@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from app.services.crawler.dtos import BrowsePage, GameCandidate, GameDetails
+from app.services.crawler.dtos import BrowsePage, GameCandidate, GameDetails, ReviewPage
 
 
 class MetacriticSource(Protocol):
@@ -20,3 +20,16 @@ class MetacriticSource(Protocol):
     async def get_game_details(self, url: str) -> GameDetails:
         """Fetch detailed information for a specific game."""
         ...
+
+    async def get_critic_reviews(
+        self, slug: str, page: int = 1, platform: str | None = None
+    ) -> ReviewPage:
+        """Fetch critic reviews page for a game."""
+        ...
+
+    async def get_user_reviews(
+        self, slug: str, page: int = 1, platform: str | None = None
+    ) -> ReviewPage:
+        """Fetch user reviews page for a game."""
+        ...
+

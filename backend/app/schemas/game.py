@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.schemas.platform import GamePlatformRead
 from app.schemas.review import ReviewRead
+from app.schemas.summary import GameReviewSummaryRead
 
 
 class GameBase(BaseModel):
@@ -34,8 +35,14 @@ class GameRead(GameBase):
 
 class GameDetailRead(GameRead):
     reviews: list[ReviewRead] = []
+    review_summaries: list[GameReviewSummaryRead] = []
+    critic_summary_detail: GameReviewSummaryRead | None = None
+    user_summary_detail: GameReviewSummaryRead | None = None
+    critic_review_count: int = 0
+    user_review_count: int = 0
 
     model_config = ConfigDict(from_attributes=True)
+
 
 
 class GameListResponse(BaseModel):

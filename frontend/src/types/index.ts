@@ -39,9 +39,34 @@ export interface Game {
   game_platforms: GamePlatform[];
 }
 
+export interface GameReviewSummary {
+  id: number;
+  game_id: number;
+  review_type: 'critic' | 'user';
+  summary: string;
+  likes: string[];
+  dislikes: string[];
+  review_count_used: number;
+  total_reviews_seen: number;
+  input_fingerprint: string;
+  provider: string;
+  model: string;
+  prompt_version: string;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  generated_at: string;
+  updated_at: string;
+}
+
 export interface GameDetail extends Game {
   reviews: Review[];
+  review_summaries?: GameReviewSummary[];
+  critic_summary_detail?: GameReviewSummary | null;
+  user_summary_detail?: GameReviewSummary | null;
+  critic_review_count?: number;
+  user_review_count?: number;
 }
+
 
 export interface GameListResponse {
   items: Game[];

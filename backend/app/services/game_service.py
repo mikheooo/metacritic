@@ -89,14 +89,16 @@ async def get_games(
 
 
 async def get_game_by_id(db: AsyncSession, game_id: int) -> Game | None:
-    """Retrieve a single game with platforms and reviews loaded."""
+    """Retrieve a single game with platforms, reviews, and review summaries loaded."""
     stmt = (
         select(Game)
         .options(
             selectinload(Game.game_platforms).selectinload(GamePlatform.platform),
             selectinload(Game.reviews),
+            selectinload(Game.review_summaries),
         )
         .where(Game.id == game_id)
     )
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
+

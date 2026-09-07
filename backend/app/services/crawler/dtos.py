@@ -70,3 +70,38 @@ class BrowsePage:
     page: int
     has_next: bool = False
     total_pages: int | None = None
+
+
+@dataclass
+class ReviewItem:
+    external_id: str
+    review_type: str  # "critic" or "user"
+    author: str | None
+    score: float | None
+    body: str
+    published_at: str | None
+    platform_slug: str | None
+    source_url: str | None = None
+    sentiment_category: str = "mixed"  # "positive", "mixed", "negative"
+    content_hash: str = ""
+
+
+@dataclass
+class ReviewPage:
+    reviews: list[ReviewItem]
+    current_page: int
+    has_next_page: bool = False
+    total_pages: int | None = None
+
+
+@dataclass(frozen=True)
+class ReviewForSummary:
+    external_id: str
+    review_type: str
+    author: str | None
+    score: float | None
+    body: str
+    platform_slug: str | None
+    sentiment_category: str
+    content_hash: str
+

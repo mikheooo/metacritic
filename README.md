@@ -1,6 +1,6 @@
-# Metacritic AI Platform — Foundation & Ingestion (Stage 2)
+# Metacritic AI Platform — Reviews Ingestion & AI Summaries (Stage 3)
 
-Production-like foundation for an AI Engineer test project designed to ingest, process, and analyze game data from Metacritic with automated scheduling, review insights, embedding similarity, and monitoring.
+Production-like platform designed to ingest, process, and analyze game data from Metacritic with automated scheduling, AI review insights, embedding similarity, and monitoring.
 
 > **Stage 1 Scope**: Core project skeleton, database schema with constraints, migrations, FastAPI endpoints (`/health`, `/ready`, `/api/games`), Celery infrastructure with diagnostic ping task, React + TypeScript + Vite frontend, Docker Compose orchestration, tests, linting, and architecture documentation.
 >
@@ -12,6 +12,18 @@ Production-like foundation for an AI Engineer test project designed to ingest, p
 > - Redis distributed lock (`CrawlLock`) preventing overlapping scheduled/manual crawler runs.
 > - Failure isolation: per-game savepoint rollback; failed games remain eligible for subsequent runs.
 > - Developer CLI (`python -m app.cli crawl --limit 20 [--dry-run]`) and Celery task (`tasks.process_metacritic_batch`).
+>
+> **Stage 3 Scope**: Reviews Ingestion & AI Summaries:
+> - Critic reviews and user reviews ingestion: parsed with author, publication, score, platform badge, date, body, and external URL.
+> - Strict architectural separation: critic and user reviews are ingested, stored, sampled, and summarized independently.
+> - Deterministic sampling (`select_reviews_for_summary`): balances sentiment (positive, mixed, negative) and platform diversity with zero non-determinism.
+> - SHA-256 canonical review corpus fingerprinting (`compute_input_fingerprint`): skips expensive LLM calls if the selected review corpus is unchanged.
+> - LLM provider abstraction: `ReviewSummarizer` Protocol with production `OpenAIReviewSummarizer` (structured outputs) and `FakeReviewSummarizer`.
+> - Prompt injection defenses: treats reviews as untrusted external content with explicit delimiter isolation.
+> - Database schema: Alembic migration 002 adding `game_review_summaries` table and review enrichment columns (`platform_id`, `source_url`, `content_hash`).
+> - Background Celery tasks (`tasks.enrich_game_reviews`, `tasks.summarize_game_reviews`) and CLI (`python -m app.cli enrich`).
+> - Frontend UI on `/games/:id`: visually distinct **"Critics say"** and **"Players say"** consensus cards with 3 likes, 3 dislikes, review counts, and tabbed review explorer.
+
 
 ---
 
@@ -271,32 +283,53 @@ docker compose run --rm backend python -m app.cli crawl --limit 20
 
 # Specify custom limit or trigger type
 docker compose run --rm backend python -m app.cli crawl --limit 5 --trigger manual
+
+# Enrich a specific game with Metacritic reviews and AI summaries
+docker compose run --rm backend python -m app.cli enrich --game-id 11
+
+# Enrich by game slug
+docker compose run --rm backend python -m app.cli enrich --slug elden-ring
+
+# Re-summarize existing reviews without re-scraping
+docker compose run --rm backend python -m app.cli enrich --game-id 11 --summarize-only
 ```
 
-### Celery Task Entrypoint
+### Celery Task Entrypoints
 
-Scheduled or asynchronous crawls are dispatched via Celery:
+Scheduled or asynchronous jobs are dispatched via Celery:
 
 ```python
-from app.workers.tasks import process_metacritic_batch
+from app.workers.tasks import process_metacritic_batch, enrich_game_reviews, summarize_game_reviews
 
-# Async dispatch via worker
-task = process_metacritic_batch.delay(limit=20, trigger_type="scheduled", dry_run=False)
+# Batch crawl task
+crawl_task = process_metacritic_batch.delay(limit=20, trigger_type="scheduled", dry_run=False)
+
+# Review enrichment task (ingest + summarize)
+enrich_task = enrich_game_reviews.delay(game_id=11)
+
+# Summarize task (without re-ingesting)
+sum_task = summarize_game_reviews.delay(game_id=11, review_type="both")
 ```
 
 ---
 
-## Current Status: Stage 2 COMPLETE
+## Current Status: Stage 3 COMPLETE
 
 - [x] Full-stack directory structure & container orchestration
-- [x] SQLAlchemy 2.0 models with strict constraints (`DailyGameProcessing`, `DailyCrawlState`, `CrawlRun`)
-- [x] Pure decoupled parser (`MetacriticParser`) with DOM testids & Schema.org JSON-LD extraction
+- [x] SQLAlchemy 2.0 models with strict constraints (`DailyGameProcessing`, `DailyCrawlState`, `CrawlRun`, `Review`, `GameReviewSummary`)
+- [x] Pure decoupled parser (`MetacriticParser`) with critic/user review extraction and HTML test fixtures
 - [x] Resilient HTTP client (`MetacriticClient`) with rate limiting and exponential backoff
 - [x] Concurrency protection via Redis distributed lock (`CrawlLock`)
 - [x] Calendar day deduplication invariant via `DailyGameProcessing`
 - [x] Cursor vs ledger progression (`DailyCrawlState` pointer vs `DailyGameProcessing` truth)
 - [x] Per-game failure isolation with transaction savepoints
-- [x] Developer CLI (`python -m app.cli crawl`) and Celery worker task (`process_metacritic_batch`)
-- [x] 33 automated tests covering parser, models, API, daily crawler state transitions, and lock contention
-- [x] Controlled live validation verifying live persistence, same-day deduplication, and zero SQL duplicate violations
-- [x] Clean Ruff and mypy validation (0 errors across all 41 source files)
+- [x] Deterministic review sampling (`select_reviews_for_summary`) with sentiment quota and platform interleaving
+- [x] Canonical SHA-256 fingerprinting (`compute_input_fingerprint`) skipping unchanged LLM calls for cost control
+- [x] `ReviewSummarizer` Protocol with structured `OpenAIReviewSummarizer` and deterministic `FakeReviewSummarizer`
+- [x] System prompt injection defenses with untrusted delimiters
+- [x] Developer CLI (`python -m app.cli crawl`, `python -m app.cli enrich`) and Celery tasks (`tasks.enrich_game_reviews`, `tasks.summarize_game_reviews`)
+- [x] Frontend UI on `/games/:id` rendering "Critics say" and "Players say" cards with 3 likes, 3 dislikes, review counts, and review tabs
+- [x] 57 automated tests covering parser, models, API, daily crawler state transitions, sampling, fingerprinting, and review enrichment
+- [x] Controlled live validation verifying real Metacritic ingestion, summary generation, second-run skipping, and zero duplicate SQL violations
+- [x] Clean Ruff and mypy validation (0 errors across 47 source files)
+

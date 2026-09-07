@@ -7,7 +7,7 @@ This document describes the foundational architecture of the Metacritic Game Ana
 ```
 +-------------------------------------------------------------+
 |                      React Frontend (Vite)                  |
-|                Routes: / , /games/:id , /monitor            |
+|   Catalog (/), Detail (/games/:id - Critics/Players Say)   |
 +------------------------------+------------------------------+
                                |
                                | HTTP / JSON REST API
@@ -21,17 +21,18 @@ This document describes the foundational architecture of the Metacritic Game Ana
                                v
 +-------------------------------------------------------------+
 |                   PostgreSQL Database (pgvector)            |
-|       Games, Platforms, Reviews, SimilarGames, CrawlState   |
+|       Games, Platforms, Reviews, GameReviewSummaries        |
 +-------------------------------------------------------------+
 
-                      [ Background Processing ]
+                      [ Background Processing & AI ]
 
 +-------------------------------------------------------------+
-|                      Scheduler (Future)                     |
-|                 Hourly crawl triggers / tasks               |
+|                   Review Enrichment Pipeline                |
+|  Metacritic Critic/User Ingestion -> Deterministic Sampling |
+|      -> Fingerprinting -> LLM Structured Summarization      |
 +------------------------------+------------------------------+
                                |
-                               | Task Dispatch (AMPQ/Redis)
+                               | Task Dispatch (Celery / Redis)
                                v
 +-------------------------------------------------------------+
 |                         Redis 7                             |
@@ -42,7 +43,8 @@ This document describes the foundational architecture of the Metacritic Game Ana
                                v
 +-------------------------------------------------------------+
 |                      Celery Workers                         |
-|         Diagnostics (ping) -> Future Ingestion Pipelines    |
+|   tasks.process_metacritic_batch, tasks.enrich_game_reviews |
+|                 tasks.summarize_game_reviews                |
 +-------------------------------------------------------------+
 ```
 
@@ -52,12 +54,15 @@ This document describes the foundational architecture of the Metacritic Game Ana
 
 ### 1. Frontend (React 19 + TypeScript + Vite)
 - User interface for browsing ingested games, filtering by platform, searching by title, and sorting by Metascore/UserScore.
-- Detail view showing game metadata, platform scores, and critic/user summaries.
-- Monitor dashboard providing visibility into Celery worker status and future crawl runs.
+- Detail view showing game metadata, platform scores, and visually distinct **"Critics say"** and **"Players say"** cards with synthesized consensus, 3 likes, 3 dislikes, review count badges, and provider information.
+- Tabbed individual review explorer for critic and user reviews.
+- Monitor dashboard providing visibility into Celery worker status and crawl runs.
 
 ### 2. Backend API (FastAPI)
 - Exposes structured REST endpoints under `/api`.
 - Validates all request parameters with Pydantic v2 schemas.
+- Exposes game detail with structured AI summaries and exact database review counts.
+
 - Strictly whitelists sort fields (`metascore`, `userscore`, `title`, `created_at`) and directions (`asc`, `desc`) to prevent SQL injection vulnerabilities.
 - Performs health (`/health`) and database connectivity readiness checks (`/ready`).
 
