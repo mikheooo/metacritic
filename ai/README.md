@@ -5,14 +5,15 @@ This directory contains the complete raw conversation logs and transcripts from 
 ## Exported Files
 
 1. **`conversation.jsonl`**
-   - The unified chronological transcript containing all steps, user prompts, planner reasoning, tool executions, and outputs across the entire lifecycle of the project (Stages 1 through 7).
-   - Contains 4,289+ steps in standard JSON Lines format.
+   - The unified chronological transcript containing all steps, user prompts, planner reasoning, tool executions, and outputs across the entire lifecycle of the project (Stages 1 through 7 and post-release hotfix).
+   - Contains 5,326 steps in standard JSON Lines format.
 
 2. **Stage-specific Transcripts**:
    - `stage_1_to_4_transcript.jsonl`: Inception, Metacritic crawler, Daily cursor, AI review summarization, pgvector embeddings & similarity engine.
    - `stage_5_transcript.jsonl`: Celery Beat hourly scheduler, Celery worker pipeline, and SSE realtime monitoring UI.
    - `stage_6_transcript.jsonl`: YouTube Let's Play discovery, speech transcript fetching, and AI video summaries.
-   - `stage_7_transcript.jsonl`: Production hardening, Docker compose readiness, release verification, and final submission.
+   - `stage_7_transcript.jsonl`: Production hardening, persistent GCP deployment, release verification, and final submission.
+   - `stage_7_cover_hotfix_transcript.jsonl`: Post-release cover extraction cascade, frontend fallback, and safe backfill audit.
 
 ## Security & Secrets Redaction
 

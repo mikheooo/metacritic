@@ -1,4 +1,4 @@
-﻿import os
+import os
 import re
 from pathlib import Path
 
@@ -53,14 +53,15 @@ with open(unified_path, "w", encoding="utf-8") as out_unified:
     for label, conv_id in METACRITIC_STAGES:
         log_file = BRAIN_DIR / conv_id / ".system_generated" / "logs" / "transcript.jsonl"
         stage_file = AI_DIR / f"{label}_transcript.jsonl"
-        
+
         if not log_file.exists():
             print(f"Warning: {log_file} not found, skipping")
             continue
-            
+
         stage_lines = 0
-        with open(log_file, "r", encoding="utf-8", errors="ignore") as in_f, \
-             open(stage_file, "w", encoding="utf-8") as out_stage:
+        with open(log_file, "r", encoding="utf-8", errors="ignore") as in_f, open(
+            stage_file, "w", encoding="utf-8"
+        ) as out_stage:
             for line in in_f:
                 clean_line = sanitize(line)
                 out_stage.write(clean_line)
@@ -68,6 +69,20 @@ with open(unified_path, "w", encoding="utf-8") as out_unified:
                 stage_lines += 1
                 total_lines += 1
         print(f"Exported {label}: {stage_lines} lines -> {stage_file.name}")
+
+# Also extract the dedicated cover hotfix slice
+stage7_log = BRAIN_DIR / "a5fcc80c-c553-4f2b-b448-608e3fb8d5a8" / ".system_generated" / "logs" / "transcript.jsonl"
+hotfix_file = AI_DIR / "stage_7_cover_hotfix_transcript.jsonl"
+if stage7_log.exists():
+    hotfix_lines = 0
+    with open(stage7_log, "r", encoding="utf-8", errors="ignore") as in_f, open(
+        hotfix_file, "w", encoding="utf-8"
+    ) as out_hf:
+        for idx, line in enumerate(in_f, start=1):
+            if idx >= 960:
+                out_hf.write(sanitize(line))
+                hotfix_lines += 1
+    print(f"Exported cover hotfix slice: {hotfix_lines} lines -> {hotfix_file.name}")
 
 print(f"Total unified lines written to {unified_path.name}: {total_lines}")
 

@@ -1,9 +1,9 @@
-# Metacritic AI Games Monitor — Final Release Audit (Stage 7.2)
+# Metacritic AI Games Monitor — Final Release Audit (Stage 7.2 & Cover Hotfix)
 
-**Document Version**: 1.0.2  
-**Release Date**: September 7, 2026  
+**Document Version**: 1.0.4  
+**Release Date**: September 8, 2026  
 **Status**: AUDITED — COMPLETE  
-**Git Baseline**: `v1.0.2` (successor to `efe87f7b243dc2e2b9806bca68073ad44a6471ef` / `v1.0.1`)  
+**Git Baseline**: `c3b5c4a9d59b2b906098cf594751152f24026900` / `v1.0.3` (closed in `v1.0.4`)  
 **Evaluation Demo URL**: [https://metacritic-ai-monitor.tail0c0b53.ts.net](https://metacritic-ai-monitor.tail0c0b53.ts.net) (Persistent Tailscale Funnel)
 
 ---
@@ -16,7 +16,7 @@ The **Metacritic AI Games Monitor** platform fulfills 100% of functional, archit
 
 - **Runtime Target**: Single-host Docker Compose on `e2-micro` (1 vCPU/1 GB RAM + 4 GB swap), Ubuntu 24.04, Docker 29.8.0, Compose v5.5.1.
 - **Host**: `spry-starlight-500514-s7` / `metacritic-ai-monitor` / `us-central1-a`, 30 GB `pd-standard` (Free Tier eligible), external IPv6 `2600:1900:4000:1c53::/128`, **no external IPv4**, **no Cloud NAT**.
-- **Source Transfer**: Clean `git archive v1.0.1` bundle transferred via `gcloud compute scp --tunnel-through-iap`; GitHub clone from the VM is not required (GitHub has no IPv6).
+- **Source Transfer**: Clean source bundle transferred via `gcloud compute scp --tunnel-through-iap`; Docker images rebuilt directly from source on VM.
 - **Edge**: Stable Tailscale Funnel `https://metacritic-ai-monitor.tail0c0b53.ts.net` (Personal/Free plan, no purchased domain, survives reboot) proxying `http://localhost:3000`. Quick Tunnel (`*.trycloudflare.com`) is not used as the final URL.
 - **Admin**: Google IAP SSH; Docker bridge + compose network dual-stack via ULA `fd00:` + `ip6tables` NAT66 for IPv6 outbound.
 - **Cost**: `e2-micro` free + 30 GB `pd-standard` free + external IPv6 $0 + Funnel $0 — expected recurring infra $0 within Free Tier + 1 GB egress limits.
@@ -29,6 +29,9 @@ The **Metacritic AI Games Monitor** platform fulfills 100% of functional, archit
 | Area | Requirement | Spec / Expected Invariant | Status | Verification Reference |
 | :--- | :--- | :---: | :--- |
 | **Ingestion** | Metacritic Parser | Pure HTML parser with typed DTOs, decoupled from HTTP transport | **PASS** | `backend/app/services/crawler/parser.py` |
+| **Ingestion** | Cover Extraction Cascade | Multi-tier cascade (JSON-LD string/dict/list, `@graph` VideoGame, OpenGraph `og:image`, Twitter Card `twitter:image`, DOM hero/picture/lazy) + URL normalization + placeholder filtering | **PASS** | `backend/app/services/crawler/parser.py` |
+| **Frontend** | Resilient Cover Fallbacks | Styled dark-theme `No Cover` card placeholder (16:9 aspect ratio, no grid collapse, infinite loop guard) + detail page placeholder | **PASS** | `GameCard.tsx` & `GameDetailPage.tsx` |
+| **Ingestion** | Non-Destructive Backfill | Safe CLI backfill (`app/cli.py backfill-covers`) modifying ONLY `cover_url` with rate-limiting; zero impact on summaries/embeddings/videos | **PASS** | `backend/scripts/backfill_covers.py` |
 | **Ingestion** | Calendar Day Cycle | First run of calendar day parses *New Releases*; subsequent runs parse *Browse -> Newest* (`?page=N`) | **PASS** | `backend/app/services/crawler/pipeline_service.py` |
 | **Ingestion** | Canonical Batch Limit | Exactly 20 games per scheduled/manual run (`settings.CRAWL_BATCH_LIMIT = 20`) | **PASS** | Runs #4 (20/20) and #5 (20/20) post-IPv6 fix |
 | **Ingestion** | Deduplication Ledger | `UniqueConstraint("processing_date", "game_external_id")` on `daily_game_processings` | **PASS** | 0 duplicate rows |
@@ -123,15 +126,34 @@ flowchart TD
 | `similar_games self-references` | `WHERE game_id = similar_game_id` = 0 | **0** | **PASS** |
 | `game_youtube_videos duplicates` | `(game_id)` unique | **0** | **PASS** |
 
+### Cover Integrity & Invariants Audit (Post-Release Hotfix)
+
+| Metric | Before Hotfix | After Hotfix & Backfill | Invariant / Factual Truth |
+| :--- | :---: | :---: | :--- |
+| **Total Games** | `148` | `148` | Entire catalog preserved |
+| **Valid Populated Covers** | `119` | `119` | 100% verified HTTP 2xx loadable from Metacritic CDN |
+| **Broken Populated URLs** | `0` | `0` | Zero 404/403/broken URLs among populated covers |
+| **Cover Empty String (`""`)** | `0` | `0` | Zero empty string corruptions |
+| **Cover NULL** | `29` | `29` | 29 games have NO cover image on Metacritic origin |
+| **Distinct Cover Hosts** | `1` (`www.metacritic.com`) | `1` (`www.metacritic.com`) | CBS Interactive CDN |
+| **Live UI Fallback** | Collapsed/Hidden (`display: none`) | **Styled Placeholder** (`No Cover` badge) | 16:9 card aspect ratio, no grid gap |
+
+> [!NOTE]
+> **Factual Release Truth**:
+> We do not falsely claim that 148/148 games have a real cover image. Metacritic itself does not host cover art for 29 small indie/niche catalog entries (JSON-LD `image: None`, OpenGraph `None`, hero `None`).
+> The hotfix ensures that:
+> 1. Any available cover is discovered via the comprehensive multi-tier cascade.
+> 2. Games without covers on Metacritic render an intentional, elegant dark-theme placeholder card in the UI grid, preventing card collapse, visual holes, and infinite error loops.
+
 ---
 
 ## 5. Automated Quality Gates
 
-1. **Unit & Integration Tests**: `pytest backend/tests`: **124 passed, 0 failed, 0 errors** (see § Final Gates).
+1. **Unit & Integration Tests**: `pytest backend/tests`: **134 passed, 0 failed, 0 errors** (+10 new parser unit tests in `tests/test_crawler_parser.py`).
 2. **Code Linting (Ruff)**: `ruff check .`: **All checks passed!**
-3. **Code Formatting (Ruff)**: `ruff format --check .`: **99 files clean**.
+3. **Code Formatting (Ruff)**: `ruff format --check .`: **100 files clean**.
 4. **Static Type Checking (Mypy)**: `mypy app`: **Success: no issues found in 66 source files**.
-5. **Frontend Build**: `npm run build`: Succeeded with zero TypeScript diagnostics.
+5. **Frontend Build**: `npm run build`: Succeeded with zero TypeScript diagnostics (built in 570ms).
 
 ---
 
@@ -169,8 +191,13 @@ Validated via `GET /api/games/11` on the Funnel URL.
 
 ## 7. AI Conversation Export & Sanitization Audit
 
-All AI collaboration transcripts (Stages 1 through 7.2) are exported and scrubbed:
-- `ai/conversation.jsonl`, `ai/stage_1_to_4_transcript.jsonl`, `ai/stage_5_transcript.jsonl`, `ai/stage_6_transcript.jsonl`, `ai/stage_7_transcript.jsonl`
+All AI collaboration transcripts (Stages 1 through 7 and Post-Release Cover Hotfix) are exported and scrubbed:
+- `ai/conversation.jsonl`: Complete, unified conversation log (5,326 steps).
+- `ai/stage_1_to_4_transcript.jsonl`: Stages 1–4 transcripts (2,335 steps).
+- `ai/stage_5_transcript.jsonl`: Stage 5 realtime monitoring & scheduling (823 steps).
+- `ai/stage_6_transcript.jsonl`: Stage 6 YouTube discovery & transcripts (719 steps).
+- `ai/stage_7_transcript.jsonl`: Stage 7 production audit & deployment (1,449 steps).
+- `ai/stage_7_cover_hotfix_transcript.jsonl`: Post-release cover extraction cascade, frontend fallback, and safe backfill audit (490 steps).
 - **Sanitization Guarantee**: 0 secret leaks found across all files (regex scan, no `OPENROUTER_API_KEY`/`YOUTUBE_API_KEY` values in docs, Dockerfiles, or chat logs).
 
 ---
@@ -179,7 +206,7 @@ All AI collaboration transcripts (Stages 1 through 7.2) are exported and scrubbe
 
 **VERDICT**:
 ```text
-STAGE 7 — COMPLETE
+STAGE 7 — COMPLETE (v1.0.4 Release-Truth & Provenance Closure)
 ```
-Persistent VM exists, is not dependent on the local PC, serves a stable Funnel hostname that survives restart/reboot, keeps Postgres/Redis private, runs with production env, worker (concurrency=1) online, Beat hourly (`0 * * * *` UTC, `limit=20`), SSE works, Run Now works, DB persists, cost documented as $0 within Free Tier, all quality gates green.
+Persistent VM exists, is not dependent on the local PC, serves a stable Funnel hostname that survives restart/reboot, keeps Postgres/Redis private, runs with production env, immutable Docker images rebuilt from clean source on the host, worker (concurrency=1) online, Beat hourly (`0 * * * *` UTC, `limit=20`), SSE works, Run Now works, DB persists (148 games, 119 covers + 29 graceful UI placeholders), all quality gates green (134/134 tests).
 

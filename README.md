@@ -1,6 +1,6 @@
 # Metacritic AI Games Monitor — Platform & Release Architecture
 
-[![Quality Gates](https://img.shields.io/badge/Tests-124%20passed-brightgreen.svg)]()
+[![Quality Gates](https://img.shields.io/badge/Tests-134%20passed-brightgreen.svg)]()
 [![Code Style: Ruff](https://img.shields.io/badge/Code%20Style-Ruff-000000.svg)]()
 [![Type Checked: Mypy](https://img.shields.io/badge/Type%20Check-Mypy%20Strict-blue.svg)]()
 [![Docker Compose](https://img.shields.io/badge/Orchestration-Docker%20Compose-2496ED.svg)]()
@@ -249,12 +249,13 @@ docker compose run --rm backend alembic history
 
 ## AI Collaboration & Transcripts
 
-All interactions, architectural reasoning, and planning logs throughout development (Stages 1 through 7) are exported and sanitized in the `ai/` directory:
-- `ai/conversation.jsonl`: Complete, unified conversation log.
+All interactions, architectural reasoning, and planning logs throughout development (Stages 1 through 7 and post-release hotfix) are exported and sanitized in the `ai/` directory:
+- `ai/conversation.jsonl`: Complete, unified conversation log (5,326 steps).
 - `ai/stage_1_to_4_transcript.jsonl`: Stages 1–4 transcripts.
 - `ai/stage_5_transcript.jsonl`: Stage 5 realtime monitoring & scheduling.
 - `ai/stage_6_transcript.jsonl`: Stage 6 YouTube discovery & transcripts.
 - `ai/stage_7_transcript.jsonl`: Stage 7 production audit & deployment.
+- `ai/stage_7_cover_hotfix_transcript.jsonl`: Post-release cover extraction cascade, frontend fallback, and safe backfill audit.
 - **Sanitization Guarantee**: Zero API keys or secrets are present in any exported transcripts or git commits.
 
 ---
