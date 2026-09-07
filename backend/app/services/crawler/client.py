@@ -73,7 +73,9 @@ class MetacriticClient:
 
             while attempt <= max_retries:
                 try:
-                    logger.info("Fetching URL (attempt %d/%d): %s", attempt + 1, max_retries + 1, url)
+                    logger.info(
+                        "Fetching URL (attempt %d/%d): %s", attempt + 1, max_retries + 1, url
+                    )
                     response = await client.get(url)
                     if response.status_code in (429, 500, 502, 503, 504):
                         logger.warning(
@@ -157,4 +159,3 @@ class MetacriticClient:
             url = f"{url}?{'&'.join(params)}"
         html = await self._fetch(url)
         return MetacriticParser.parse_user_reviews(html, game_slug=slug, page=page)
-

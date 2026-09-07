@@ -56,10 +56,7 @@ async def test_sse_stream_reconnect_cursor_with_last_event_id(
     assert f"id: {ev1.id}" not in response.text
 
     # Reconnect with cursor via query parameter
-    resp_param = await client.get(
-        f"/api/monitor/stream?last_event_id={ev1.id}&max_iterations=2"
-    )
+    resp_param = await client.get(f"/api/monitor/stream?last_event_id={ev1.id}&max_iterations=2")
     assert resp_param.status_code == 200
     assert f"id: {ev2.id}" in resp_param.text
     assert f"id: {ev1.id}" not in resp_param.text
-

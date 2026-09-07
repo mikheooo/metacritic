@@ -13,7 +13,9 @@ def test_celery_beat_schedule_contains_metacritic_pipeline() -> None:
     - Timezone is UTC
     """
     schedule = celery_app.conf.beat_schedule
-    assert "metacritic-pipeline-hourly" in schedule, "Hourly Metacritic pipeline missing from beat_schedule"
+    assert "metacritic-pipeline-hourly" in schedule, (
+        "Hourly Metacritic pipeline missing from beat_schedule"
+    )
 
     entry = schedule["metacritic-pipeline-hourly"]
     assert entry["task"] == "tasks.process_metacritic_pipeline"

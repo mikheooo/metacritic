@@ -148,7 +148,6 @@ def test_compute_input_fingerprint_sensitive():
     assert fp_openai != fp_openrouter
     assert fp_fake != fp_openrouter
 
-
     # Change review type
     fp_critic = compute_input_fingerprint(
         [r1, r2], prompt_version="v1", model="gpt-4o-mini", review_type="critic"
@@ -171,4 +170,3 @@ def test_compute_input_fingerprint_sensitive():
     r2_changed = _make_review(2, score=55.0)
     fp_score = compute_input_fingerprint([r1, r2_changed], prompt_version="v1", model="gpt-4o-mini")
     assert fp_base != fp_score
-

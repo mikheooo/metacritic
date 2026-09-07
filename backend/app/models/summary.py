@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 import sqlalchemy as sa

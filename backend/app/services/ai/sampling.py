@@ -40,7 +40,6 @@ def classify_sentiment(score: float | None, review_type: str) -> str:
             return "negative"
 
 
-
 def _to_summary_review(item: ReviewItem | ReviewForSummary) -> ReviewForSummary:
     if isinstance(item, ReviewForSummary):
         return item
@@ -84,10 +83,11 @@ def select_reviews_for_summary(
         seen_ids.add(cand_rev.external_id)
         cleaned_reviews.append(cand_rev)
 
-
     if len(cleaned_reviews) <= max_count:
         # If total reviews are within limit, return all sorted deterministically
-        return sorted(cleaned_reviews, key=lambda r: (r.sentiment_category, r.content_hash, r.external_id))
+        return sorted(
+            cleaned_reviews, key=lambda r: (r.sentiment_category, r.content_hash, r.external_id)
+        )
 
     # Partition into sentiment buckets
     buckets: dict[str, list[ReviewForSummary]] = {
@@ -96,7 +96,11 @@ def select_reviews_for_summary(
         "negative": [],
     }
     for r in cleaned_reviews:
-        cat = r.sentiment_category if r.sentiment_category in buckets else classify_sentiment(r.score, r.review_type)
+        cat = (
+            r.sentiment_category
+            if r.sentiment_category in buckets
+            else classify_sentiment(r.score, r.review_type)
+        )
         buckets[cat].append(r)
 
     # Within each bucket, group by platform to encourage platform diversity,
@@ -153,7 +157,6 @@ def select_reviews_for_summary(
         if not progress:
             break
 
-
     # Return selected sorted deterministically by sentiment and external_id
     return sorted(selected, key=lambda r: (r.sentiment_category, r.content_hash, r.external_id))
 
@@ -195,4 +198,3 @@ def compute_input_fingerprint(
 
     serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
-

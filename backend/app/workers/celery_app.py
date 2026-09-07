@@ -5,6 +5,7 @@ IMPORTANT:
 Only one Beat scheduler must run for this schedule.
 Additional backend/worker replicas must not run Celery Beat to avoid duplicate task dispatches.
 """
+
 from celery import Celery
 from celery.schedules import crontab
 

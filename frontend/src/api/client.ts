@@ -92,11 +92,10 @@ export async function fetchMonitorRun(runId: number): Promise<CrawlRun> {
   return res.json();
 }
 
-export async function triggerRunNow(limit = 20): Promise<RunNowResponse> {
+export async function triggerRunNow(): Promise<RunNowResponse> {
   const res = await fetch(`${API_BASE}/crawler/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ limit }),
   });
 
   if (res.status === 409) {

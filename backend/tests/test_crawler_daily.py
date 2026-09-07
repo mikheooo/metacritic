@@ -63,6 +63,7 @@ class MockMetacriticSource:
 
     async def get_game_details(self, url: str) -> GameDetails:
         from app.services.crawler.dtos import extract_canonical_slug
+
         slug = extract_canonical_slug(url)
         if slug in self.fail_on_slugs:
             raise ValueError(f"Simulated network/parsing failure for game: {slug}")
@@ -132,7 +133,9 @@ async def test_02_second_run_same_day_progresses_to_browse(db_session: AsyncSess
     for i in range(5):
         slug = f"browse-game-p1-{i}"
         source.add_game(slug, f"Browse Game P1-{i}")
-        page1_cands.append(GameCandidate(f"Browse Game P1-{i}", f"https://www.metacritic.com/game/{slug}/", slug))
+        page1_cands.append(
+            GameCandidate(f"Browse Game P1-{i}", f"https://www.metacritic.com/game/{slug}/", slug)
+        )
     source.browse_pages[1] = page1_cands
 
     service = IngestionService(db=db_session, source=source)
@@ -161,10 +164,14 @@ async def test_03_same_game_in_new_releases_and_browse_only_processed_once(
     source = MockMetacriticSource()
     source.add_game(shared_slug, "Overlap Game")
     source.new_releases_list = [
-        GameCandidate("Overlap Game", f"https://www.metacritic.com/game/{shared_slug}/", shared_slug)
+        GameCandidate(
+            "Overlap Game", f"https://www.metacritic.com/game/{shared_slug}/", shared_slug
+        )
     ]
     source.browse_pages[1] = [
-        GameCandidate("Overlap Game", f"https://www.metacritic.com/game/{shared_slug}/", shared_slug),
+        GameCandidate(
+            "Overlap Game", f"https://www.metacritic.com/game/{shared_slug}/", shared_slug
+        ),
         GameCandidate("Other Game", "https://www.metacritic.com/game/other-game/", "other-game"),
     ]
     source.add_game("other-game", "Other Game")
@@ -202,11 +209,18 @@ async def test_04_crawler_advances_through_browse_pages_to_reach_target(
     await db_session.commit()
 
     # Browse Page 1: 12 old games + 3 new games
-    p1 = [GameCandidate(f"Old Game {i}", f"https://www.metacritic.com/game/old-game-{i}/", f"old-game-{i}") for i in range(12)]
+    p1 = [
+        GameCandidate(
+            f"Old Game {i}", f"https://www.metacritic.com/game/old-game-{i}/", f"old-game-{i}"
+        )
+        for i in range(12)
+    ]
     for i in range(3):
         slug = f"new-p1-game-{i}"
         source.add_game(slug, f"New P1 Game {i}")
-        p1.append(GameCandidate(f"New P1 Game {i}", f"https://www.metacritic.com/game/{slug}/", slug))
+        p1.append(
+            GameCandidate(f"New P1 Game {i}", f"https://www.metacritic.com/game/{slug}/", slug)
+        )
     source.browse_pages[1] = p1
 
     # Browse Page 2: 25 new games
@@ -214,7 +228,9 @@ async def test_04_crawler_advances_through_browse_pages_to_reach_target(
     for i in range(25):
         slug = f"new-p2-game-{i}"
         source.add_game(slug, f"New P2 Game {i}")
-        p2.append(GameCandidate(f"New P2 Game {i}", f"https://www.metacritic.com/game/{slug}/", slug))
+        p2.append(
+            GameCandidate(f"New P2 Game {i}", f"https://www.metacritic.com/game/{slug}/", slug)
+        )
     source.browse_pages[2] = p2
 
     # Set state directly to browse page 1
@@ -243,7 +259,9 @@ async def test_05_batch_interrupted_leaves_successful_and_remaining_eligible(
     for i in range(4):
         slug = f"interrupted-game-{i}"
         source.add_game(slug, f"Game {i}")
-        source.new_releases_list.append(GameCandidate(f"Game {i}", f"https://www.metacritic.com/game/{slug}/", slug))
+        source.new_releases_list.append(
+            GameCandidate(f"Game {i}", f"https://www.metacritic.com/game/{slug}/", slug)
+        )
 
     # Make game 2 fail
     source.fail_on_slugs.add("interrupted-game-2")
@@ -297,7 +315,9 @@ async def test_07_same_game_next_calendar_day_eligible_again(db_session: AsyncSe
     source = MockMetacriticSource()
     source.add_game("chrono-trigger", "Chrono Trigger")
     source.new_releases_list = [
-        GameCandidate("Chrono Trigger", "https://www.metacritic.com/game/chrono-trigger/", "chrono-trigger")
+        GameCandidate(
+            "Chrono Trigger", "https://www.metacritic.com/game/chrono-trigger/", "chrono-trigger"
+        )
     ]
 
     service = IngestionService(db=db_session, source=source)
@@ -356,9 +376,13 @@ async def test_09_score_changed_updates_game_platform(db_session: AsyncSession) 
     set_clock(clock)
 
     source = MockMetacriticSource()
-    source.add_game("baldurs-gate-3", "Baldurs Gate 3", metascore=90, userscore=8.5, platform_slug="pc")
+    source.add_game(
+        "baldurs-gate-3", "Baldurs Gate 3", metascore=90, userscore=8.5, platform_slug="pc"
+    )
     source.new_releases_list = [
-        GameCandidate("Baldurs Gate 3", "https://www.metacritic.com/game/baldurs-gate-3/", "baldurs-gate-3")
+        GameCandidate(
+            "Baldurs Gate 3", "https://www.metacritic.com/game/baldurs-gate-3/", "baldurs-gate-3"
+        )
     ]
 
     service = IngestionService(db=db_session, source=source)
@@ -428,7 +452,9 @@ async def test_11_page_content_changes_between_runs_daily_ledger_prevents_dups(
 
     # Metacritic page reorders or inserts new game: page 1 now has Game B and Game C
     source.browse_pages[1] = [
-        GameCandidate("Game B", "https://www.metacritic.com/game/game-b/", "game-b"),  # already processed
+        GameCandidate(
+            "Game B", "https://www.metacritic.com/game/game-b/", "game-b"
+        ),  # already processed
         GameCandidate("Game C", "https://www.metacritic.com/game/game-c/", "game-c"),  # new
     ]
     # Reset cursor to test ledger defense

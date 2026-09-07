@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 def _run_async_safely[T](coro: Coroutine[Any, Any, T]) -> T:
     """Run an async coroutine safely from sync Celery worker or running event loops."""
+
     async def _wrapper() -> T:
         try:
             return await coro
@@ -30,7 +31,6 @@ def _run_async_safely[T](coro: Coroutine[Any, Any, T]) -> T:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             return cast(T, executor.submit(asyncio.run, _wrapper()).result())
     return asyncio.run(_wrapper())
-
 
 
 @celery_app.task(name="tasks.ping")
@@ -263,4 +263,3 @@ def rebuild_similar_games() -> dict[str, Any]:
             return await service.rebuild_all()
 
     return _run_async_safely(_execute())
-

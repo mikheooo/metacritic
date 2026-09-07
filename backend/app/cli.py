@@ -166,8 +166,12 @@ async def run_similarity_command(
             else:
                 for idx, match in enumerate(matches, 1):
                     stmt_g = select(Game.title).where(Game.id == match.similar_game_id)
-                    title = (await session.execute(stmt_g)).scalar() or f"Game #{match.similar_game_id}"
-                    print(f"  {idx}. {title} (ID: {match.similar_game_id}) — Score: {match.similarity_score:.4f}")
+                    title = (
+                        await session.execute(stmt_g)
+                    ).scalar() or f"Game #{match.similar_game_id}"
+                    print(
+                        f"  {idx}. {title} (ID: {match.similar_game_id}) — Score: {match.similarity_score:.4f}"
+                    )
         else:
             print("Error: Specify either --game-id <id> or --rebuild-all")
             sys.exit(1)
@@ -197,7 +201,9 @@ def main() -> None:
         help="Trigger type (manual or scheduled, default: manual)",
     )
 
-    enrich_parser = subparsers.add_parser("enrich", help="Enrich game reviews and generate AI summaries")
+    enrich_parser = subparsers.add_parser(
+        "enrich", help="Enrich game reviews and generate AI summaries"
+    )
     enrich_parser.add_argument(
         "--game-id",
         type=int,
@@ -235,7 +241,9 @@ def main() -> None:
         help="Force re-embedding even if input fingerprint is unchanged",
     )
 
-    sim_parser = subparsers.add_parser("similarity", help="Compute and materialize similar game recommendations")
+    sim_parser = subparsers.add_parser(
+        "similarity", help="Compute and materialize similar game recommendations"
+    )
     sim_parser.add_argument(
         "--game-id",
         type=int,
@@ -259,11 +267,21 @@ def main() -> None:
     if args.command == "crawl":
         asyncio.run(run_crawl_command(limit=args.limit, dry_run=args.dry_run, trigger=args.trigger))
     elif args.command == "enrich":
-        asyncio.run(run_enrich_command(game_id=args.game_id, slug=args.slug, summarize_only=args.summarize_only))
+        asyncio.run(
+            run_enrich_command(
+                game_id=args.game_id, slug=args.slug, summarize_only=args.summarize_only
+            )
+        )
     elif args.command == "embed":
-        asyncio.run(run_embed_command(game_id=args.game_id, all_games=args.all_games, force=args.force))
+        asyncio.run(
+            run_embed_command(game_id=args.game_id, all_games=args.all_games, force=args.force)
+        )
     elif args.command == "similarity":
-        asyncio.run(run_similarity_command(game_id=args.game_id, rebuild_all=args.rebuild_all, limit=args.limit))
+        asyncio.run(
+            run_similarity_command(
+                game_id=args.game_id, rebuild_all=args.rebuild_all, limit=args.limit
+            )
+        )
     else:
         parser.print_help()
         sys.exit(1)
@@ -271,4 +289,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -364,14 +364,20 @@ sim_task = rebuild_similar_games.delay()
   - Resilience: per-game failure isolation ensures downstream review/summary/embedding failures never rollback the game record.
   - Single similarity rebuild: `rebuild_similar_games` runs once at the end of the batch across all embedded games.
 
+- **Production Batch Contract (Run Now & Scheduler)**:
+  - Both automated Celery Beat runs and manual public `Run Now` invocations strictly enforce the canonical production batch size of **20 games** (`settings.CRAWL_BATCH_LIMIT = 20`).
+  - Public API `POST /api/crawler/run` requires no request body and ignores client-supplied limit overrides; batch sizing is strictly managed server-side.
+  - Small custom limits (`limit < 20`) are restricted to internal developer tooling (CLI: `python -m app.cli crawl --limit <N>`, internal Celery test dispatches, and unit test fixtures).
+
 - **Hourly Scheduling (`celery-beat`)**:
   - Celery Beat scheduler configured with `crontab(minute=0, hour="*")` in UTC.
   - Exactly one Celery Beat instance running in Docker Compose (`celery-beat`) to guarantee no duplicate job dispatch.
-  - Production batch default: `limit=20` games per run.
+  - Dispatches canonical production batch: `limit=20`, `trigger_type="scheduled"`.
 
 - **Concurrency Protection**:
   - Dual protection: Redis distributed lock (`metacritic:crawl_run:lock`) with 1-hour TTL + database active run check (`pending` / `running`).
   - Concurrent manual `Run Now` requests while a run is active return immediate HTTP 409 Conflict with `active_run_id` without polluting the database.
+
 
 - **Schema Evolution & Audit Log (`Alembic 005`)**:
   - `crawl_runs` table extended with: `task_id`, `target_count`, `discovered_count`, `processed_count`, `failed_count`, `reviews_processed_count`, `summaries_generated_count`, `embeddings_generated_count`, `current_stage`, `current_game_id`, `current_game_title`, `started_at`, `heartbeat_at`, `finished_at`, `error_summary`.

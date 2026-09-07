@@ -5,6 +5,7 @@ Revises: c5f1c3786bf9
 Create Date: 2026-09-07 12:30:00.000000
 
 """
+
 from collections.abc import Sequence
 
 import pgvector
@@ -35,15 +36,32 @@ def upgrade() -> None:
         sa.Column("input_fingerprint", sa.String(length=64), nullable=False),
         sa.Column("input_version", sa.String(length=50), nullable=False),
         sa.Column("input_tokens", sa.Integer(), nullable=True),
-        sa.Column("generated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "generated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["game_id"], ["games.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("game_id", name="uq_game_embeddings_game_id"),
     )
     op.create_index(op.f("ix_game_embeddings_id"), "game_embeddings", ["id"], unique=False)
-    op.create_index(op.f("ix_game_embeddings_game_id"), "game_embeddings", ["game_id"], unique=False)
-    op.create_index(op.f("ix_game_embeddings_input_fingerprint"), "game_embeddings", ["input_fingerprint"], unique=False)
+    op.create_index(
+        op.f("ix_game_embeddings_game_id"), "game_embeddings", ["game_id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_game_embeddings_input_fingerprint"),
+        "game_embeddings",
+        ["input_fingerprint"],
+        unique=False,
+    )
 
     # 3. Create HNSW index with vector_cosine_ops
     op.execute(
@@ -53,11 +71,18 @@ def upgrade() -> None:
     # 4. Update similar_games table
     op.add_column(
         "similar_games",
-        sa.Column("algorithm_version", sa.String(length=50), server_default="cosine-v1", nullable=False),
+        sa.Column(
+            "algorithm_version", sa.String(length=50), server_default="cosine-v1", nullable=False
+        ),
     )
     op.add_column(
         "similar_games",
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
     )
 
     # 5. Drop deprecated games.embedding column
@@ -68,7 +93,11 @@ def downgrade() -> None:
     # 1. Restore deprecated games.embedding column
     op.add_column(
         "games",
-        sa.Column("embedding", sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), "postgresql"), nullable=True),
+        sa.Column(
+            "embedding",
+            sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), "postgresql"),
+            nullable=True,
+        ),
     )
 
     # 2. Rollback similar_games columns

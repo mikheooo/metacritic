@@ -13,6 +13,7 @@ LOCK_KEY = "metacritic:crawl_run:lock"
 
 class CrawlAlreadyRunningError(Exception):
     """Raised when an ingestion run is already in progress."""
+
     pass
 
 

@@ -16,7 +16,9 @@ class Review(Base):
     __tablename__ = "reviews"
     __table_args__ = (
         # Deduplication constraint for repeated ingestion
-        UniqueConstraint("game_id", "review_type", "external_id", name="uq_review_game_type_external_id"),
+        UniqueConstraint(
+            "game_id", "review_type", "external_id", name="uq_review_game_type_external_id"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -56,4 +58,3 @@ class Review(Base):
     # Relationships
     game: Mapped["Game"] = relationship("Game", back_populates="reviews")
     platform: Mapped["Platform | None"] = relationship("Platform", lazy="selectin")
-

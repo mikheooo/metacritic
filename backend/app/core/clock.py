@@ -32,6 +32,7 @@ class SystemClock:
 
 class FixedClock:
     """Deterministic clock for testing time shifts and date rollovers."""
+
     def __init__(self, current_dt_or_date: datetime | date) -> None:
         if isinstance(current_dt_or_date, datetime):
             self._dt = current_dt_or_date
@@ -51,6 +52,7 @@ class FixedClock:
 
     def advance(self, days: int = 1) -> None:
         from datetime import timedelta
+
         self._dt = self._dt + timedelta(days=days)
 
 

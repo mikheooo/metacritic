@@ -154,7 +154,9 @@ def is_navigation_or_category_label(text: str | None) -> bool:
 
 def normalize_platform_slug(slug: str) -> str:
     """Normalize a platform slug to its canonical form."""
-    cleaned = re.sub(r"[^a-zA-Z0-9\-]", "", slug.strip().lower().replace(" ", "-").replace("_", "-"))
+    cleaned = re.sub(
+        r"[^a-zA-Z0-9\-]", "", slug.strip().lower().replace(" ", "-").replace("_", "-")
+    )
     return SLUG_ALIASES.get(cleaned, cleaned)
 
 
@@ -215,7 +217,10 @@ class MetacriticParser:
             title_elem = _find_by_testid(card, "product-card-title") or card.find(
                 re.compile(r"^h[1-6]$")
             )
-            title = _clean_text(title_elem.get_text() if title_elem else "") or slug.replace("-", " ").title()
+            title = (
+                _clean_text(title_elem.get_text() if title_elem else "")
+                or slug.replace("-", " ").title()
+            )
 
             seen_ids.add(slug)
             candidates.append(
@@ -234,7 +239,12 @@ class MetacriticParser:
                     continue
                 slug = extract_canonical_slug(href)
                 link_title = _clean_text(a.get_text())
-                if slug and link_title and slug not in seen_ids and not any(k in href for k in ["critic-reviews", "user-reviews"]):
+                if (
+                    slug
+                    and link_title
+                    and slug not in seen_ids
+                    and not any(k in href for k in ["critic-reviews", "user-reviews"])
+                ):
                     seen_ids.add(slug)
                     candidates.append(
                         GameCandidate(
@@ -303,7 +313,9 @@ class MetacriticParser:
 
         # Total pages extraction if visible
         total_pages = None
-        for page_span in soup.find_all(class_=re.compile(r"c-navigation-pagination__page|pagination__item")):
+        for page_span in soup.find_all(
+            class_=re.compile(r"c-navigation-pagination__page|pagination__item")
+        ):
             content = _clean_text(page_span.get_text())
             if content and content.isdigit():
                 num = int(content)
@@ -313,7 +325,8 @@ class MetacriticParser:
         return BrowsePage(
             candidates=candidates,
             page=page,
-            has_next=has_next or (len(candidates) > 0 and (total_pages is None or page < total_pages)),
+            has_next=has_next
+            or (len(candidates) > 0 and (total_pages is None or page < total_pages)),
             total_pages=total_pages,
         )
 
@@ -364,9 +377,8 @@ class MetacriticParser:
         )
 
         # 5. Cover URL
-        cover_url = (
-            _clean_text(ld_data.get("image"))
-            or _clean_text(_get_meta_content(soup, property="og:image"))
+        cover_url = _clean_text(ld_data.get("image")) or _clean_text(
+            _get_meta_content(soup, property="og:image")
         )
 
         # 6. Trailer URL
@@ -484,14 +496,20 @@ class MetacriticParser:
         reviews: list[ReviewItem] = []
         for card in cards:
             # 1. Date
-            date_elem = _find_by_testid(card, "review-card-date") or card.find(class_=re.compile(r"c-siteReviewHeader_publicationDate|date", re.I))
+            date_elem = _find_by_testid(card, "review-card-date") or card.find(
+                class_=re.compile(r"c-siteReviewHeader_publicationDate|date", re.I)
+            )
             published_at = _clean_text(date_elem.get_text()) if date_elem else None
 
             # 2. Header / Author / Score
-            header_elem = _find_by_testid(card, "review-card-header") or card.find(class_=re.compile(r"c-siteReviewHeader", re.I))
+            header_elem = _find_by_testid(card, "review-card-header") or card.find(
+                class_=re.compile(r"c-siteReviewHeader", re.I)
+            )
 
             score: float | None = None
-            score_elem = card.find(class_=re.compile(r"c-siteReviewScore")) or card.find(attrs={"aria-label": re.compile(r"score", re.I)})
+            score_elem = card.find(class_=re.compile(r"c-siteReviewScore")) or card.find(
+                attrs={"aria-label": re.compile(r"score", re.I)}
+            )
             if score_elem:
                 aria_lbl = _get_attr(score_elem, "aria-label") or ""
                 match_aria = re.search(r"(\d+(?:\.\d+)?)\s+out\s+of", aria_lbl)
@@ -502,7 +520,11 @@ class MetacriticParser:
                         score = None
                 else:
                     span_score = score_elem.find("span")
-                    score_val = span_score.get_text().strip() if span_score else score_elem.get_text().strip()
+                    score_val = (
+                        span_score.get_text().strip()
+                        if span_score
+                        else score_elem.get_text().strip()
+                    )
                     score = _parse_score_float(score_val)
 
             # Author name (strip score text from header if present)
@@ -528,16 +550,19 @@ class MetacriticParser:
                     rm.decompose()
                 body = _clean_text(q_clone.get_text()) or ""
 
-
             # 4. Platform
-            platform_elem = _find_by_testid(card, "review-platform") or card.find(class_=re.compile(r"platform", re.I))
+            platform_elem = _find_by_testid(card, "review-platform") or card.find(
+                class_=re.compile(r"platform", re.I)
+            )
             platform_name = _clean_text(platform_elem.get_text()) if platform_elem else None
             platform_slug = platform_name.lower().replace(" ", "-") if platform_name else None
 
             # 5. Full review link (critic)
             source_url = None
             if review_type == "critic":
-                full_link_elem = _find_by_testid(card, "review-full-review-link") or card.find("a", href=re.compile(r"^https?://"))
+                full_link_elem = _find_by_testid(card, "review-full-review-link") or card.find(
+                    "a", href=re.compile(r"^https?://")
+                )
                 if full_link_elem:
                     source_url = _get_attr(full_link_elem, "href")
 
@@ -595,10 +620,12 @@ class MetacriticParser:
 
     @staticmethod
     def parse_critic_reviews(html: str, game_slug: str, page: int = 1) -> ReviewPage:
-        return MetacriticParser._parse_reviews_page(html, game_slug=game_slug, review_type="critic", page=page)
+        return MetacriticParser._parse_reviews_page(
+            html, game_slug=game_slug, review_type="critic", page=page
+        )
 
     @staticmethod
     def parse_user_reviews(html: str, game_slug: str, page: int = 1) -> ReviewPage:
-        return MetacriticParser._parse_reviews_page(html, game_slug=game_slug, review_type="user", page=page)
-
-
+        return MetacriticParser._parse_reviews_page(
+            html, game_slug=game_slug, review_type="user", page=page
+        )

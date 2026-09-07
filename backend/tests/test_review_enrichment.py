@@ -1,4 +1,3 @@
-
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
@@ -48,7 +47,9 @@ class MockReviewSource:
         )
 
 
-async def _create_test_game(db: AsyncSession, slug: str = "elden-ring", title: str = "Elden Ring") -> Game:
+async def _create_test_game(
+    db: AsyncSession, slug: str = "elden-ring", title: str = "Elden Ring"
+) -> Game:
     game = Game(
         metacritic_slug=slug,
         metacritic_url=f"https://www.metacritic.com/game/{slug}/",
@@ -223,7 +224,9 @@ async def test_upsert_prevents_duplicate_reviews(db_session: AsyncSession):
 
     # Verify review count is strictly 6, not 12
     count_critic = await db_session.scalar(
-        select(func.count(Review.id)).where(Review.game_id == game.id, Review.review_type == "critic")
+        select(func.count(Review.id)).where(
+            Review.game_id == game.id, Review.review_type == "critic"
+        )
     )
     count_user = await db_session.scalar(
         select(func.count(Review.id)).where(Review.game_id == game.id, Review.review_type == "user")
@@ -368,7 +371,6 @@ def test_provider_missing_openai_key_raises_explicit_error(monkeypatch):
     assert fake_inst.call_count == 0
 
 
-
 @pytest.mark.asyncio
 async def test_provider_switch_forces_regeneration(db_session: AsyncSession):
     """
@@ -427,7 +429,9 @@ async def test_provider_switch_forces_regeneration(db_session: AsyncSession):
             )
 
     openrouter_summarizer = MockOpenRouterSummarizer()
-    service_openrouter = ReviewEnrichmentService(db=db_session, source=source, summarizer=openrouter_summarizer)
+    service_openrouter = ReviewEnrichmentService(
+        db=db_session, source=source, summarizer=openrouter_summarizer
+    )
 
     # Summarize with new provider on same reviews
     res_switch = await service_openrouter.summarize_game_reviews(game, "critic")
@@ -445,7 +449,6 @@ async def test_provider_switch_forces_regeneration(db_session: AsyncSession):
     res_subsequent = await service_openrouter.summarize_game_reviews(game, "critic")
     assert res_subsequent.status == "skipped_unchanged"
     assert openrouter_summarizer.call_count == 1  # No additional LLM call
-
 
 
 @pytest.mark.asyncio
@@ -487,7 +490,9 @@ async def test_llm_failure_persistence_invariant(db_session: AsyncSession):
     assert db_game is not None
 
     count_critic = await db_session.scalar(
-        select(func.count(Review.id)).where(Review.game_id == game.id, Review.review_type == "critic")
+        select(func.count(Review.id)).where(
+            Review.game_id == game.id, Review.review_type == "critic"
+        )
     )
     count_user = await db_session.scalar(
         select(func.count(Review.id)).where(Review.game_id == game.id, Review.review_type == "user")
@@ -497,9 +502,12 @@ async def test_llm_failure_persistence_invariant(db_session: AsyncSession):
 
     # Invariant: No summaries created in DB
     summaries = (
-        await db_session.execute(
-            select(GameReviewSummary).where(GameReviewSummary.game_id == game.id)
+        (
+            await db_session.execute(
+                select(GameReviewSummary).where(GameReviewSummary.game_id == game.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(summaries) == 0
-

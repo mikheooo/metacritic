@@ -30,10 +30,12 @@ class SimpleMockSource:
 
     async def get_browse_page(self, page: int) -> Any:
         from app.services.crawler.dtos import BrowsePage
+
         return BrowsePage(candidates=[], page=page, has_next=False)
 
     async def get_game_details(self, url: str) -> GameDetails:
         from app.services.crawler.dtos import extract_canonical_slug
+
         slug = extract_canonical_slug(url)
         return GameDetails(
             external_id=slug,
@@ -82,13 +84,15 @@ async def test_crawler_dry_run_mode(db_session: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_celery_task_integration(db_session: AsyncSession) -> None:
     """Verify the Celery process_metacritic_batch entrypoint dispatches cleanly."""
-    with patch(
-        "app.services.crawler.ingestion_service.MetacriticClient.get_new_releases"
-    ) as mock_nr, patch(
-        "app.services.crawler.ingestion_service.MetacriticClient.get_browse_page"
-    ) as mock_bp, patch(
-        "app.services.crawler.ingestion_service.MetacriticClient.get_game_details"
-    ) as mock_details:
+    with (
+        patch(
+            "app.services.crawler.ingestion_service.MetacriticClient.get_new_releases"
+        ) as mock_nr,
+        patch("app.services.crawler.ingestion_service.MetacriticClient.get_browse_page") as mock_bp,
+        patch(
+            "app.services.crawler.ingestion_service.MetacriticClient.get_game_details"
+        ) as mock_details,
+    ):
         cand = GameCandidate("Task Game", "https://www.metacritic.com/game/task-game/", "task-game")
         mock_nr.return_value = [cand]
         mock_bp.return_value = BrowsePage(candidates=[cand], page=1, has_next=False)
@@ -104,4 +108,3 @@ async def test_celery_task_integration(db_session: AsyncSession) -> None:
         assert res["dry_run"] is True
         assert res["eligible_count"] == 1
         assert "Task Game" in res["candidates"]
-

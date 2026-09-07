@@ -122,7 +122,9 @@ def mock_source() -> MockComprehensiveSource:
         slug = f"game-{i}"
         source.add_game(slug=slug, title=f"Game #{i}", metascore=80 + i)
         source.new_releases_list.append(
-            GameCandidate(title=f"Game #{i}", url=f"https://www.metacritic.com/game/{slug}/", external_id=slug)
+            GameCandidate(
+                title=f"Game #{i}", url=f"https://www.metacritic.com/game/{slug}/", external_id=slug
+            )
         )
     return source
 
@@ -176,7 +178,11 @@ async def test_full_pipeline_success(
         assert run.finished_at is not None
 
         # Verify event persistence
-        stmt_ev = select(CrawlRunEvent).where(CrawlRunEvent.crawl_run_id == run.id).order_by(CrawlRunEvent.id.asc())
+        stmt_ev = (
+            select(CrawlRunEvent)
+            .where(CrawlRunEvent.crawl_run_id == run.id)
+            .order_by(CrawlRunEvent.id.asc())
+        )
         res_ev = await db_session.execute(stmt_ev)
         events = res_ev.scalars().all()
 
@@ -200,7 +206,9 @@ async def test_full_pipeline_success(
 
 @pytest.mark.asyncio
 async def test_daily_semantics_through_scheduled_runs(
-    db_session: AsyncSession, mock_source: MockComprehensiveSource, mock_pipeline_service: MetacriticPipelineService
+    db_session: AsyncSession,
+    mock_source: MockComprehensiveSource,
+    mock_pipeline_service: MetacriticPipelineService,
 ) -> None:
     """
     Verify Stage 2 daily semantics invariant works through MetacriticPipelineService:
@@ -210,7 +218,11 @@ async def test_daily_semantics_through_scheduled_runs(
     """
     # Setup browse page with additional games
     mock_source.browse_pages[1] = [
-        GameCandidate(title=f"Browse #{i}", url=f"https://www.metacritic.com/game/browse-{i}/", external_id=f"browse-{i}")
+        GameCandidate(
+            title=f"Browse #{i}",
+            url=f"https://www.metacritic.com/game/browse-{i}/",
+            external_id=f"browse-{i}",
+        )
         for i in range(1, 4)
     ]
     for i in range(1, 4):
@@ -242,7 +254,9 @@ async def test_daily_semantics_through_scheduled_runs(
         res3 = await mock_pipeline_service.run_pipeline(limit=2, trigger_type="scheduled")
         assert res3.status == "completed"
 
-        stmt_state2 = select(DailyCrawlState).where(DailyCrawlState.processing_date == date(2026, 9, 2))
+        stmt_state2 = select(DailyCrawlState).where(
+            DailyCrawlState.processing_date == date(2026, 9, 2)
+        )
         state2 = (await db_session.execute(stmt_state2)).scalar_one()
         assert state2.phase == "browse"  # Advanced from new_releases
 
@@ -288,7 +302,9 @@ async def test_manual_vs_scheduled_equivalence(
 
 @pytest.mark.asyncio
 async def test_downstream_review_failure_isolation(
-    db_session: AsyncSession, mock_source: MockComprehensiveSource, mock_pipeline_service: MetacriticPipelineService
+    db_session: AsyncSession,
+    mock_source: MockComprehensiveSource,
+    mock_pipeline_service: MetacriticPipelineService,
 ) -> None:
     """
     Verify failure boundary:

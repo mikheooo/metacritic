@@ -78,7 +78,6 @@ class ReviewEnrichmentService:
         self.source = source
         self.summarizer = summarizer or get_summarizer()
 
-
     async def _get_or_create_platform(self, platform_slug: str) -> Platform:
         slug_clean = platform_slug.lower().strip()
         stmt = select(Platform).where(Platform.slug == slug_clean)
@@ -105,7 +104,9 @@ class ReviewEnrichmentService:
         Upserts each review on (game_id, review_type, external_id).
         """
         limit = max_items or (
-            settings.CRITIC_REVIEW_MAX_ITEMS if review_type == "critic" else settings.USER_REVIEW_MAX_ITEMS
+            settings.CRITIC_REVIEW_MAX_ITEMS
+            if review_type == "critic"
+            else settings.USER_REVIEW_MAX_ITEMS
         )
         slug = game.metacritic_slug
 
@@ -130,7 +131,6 @@ class ReviewEnrichmentService:
                 raise RuntimeError(
                     f"Failed to fetch {review_type} reviews page {page} for '{slug}': {exc}"
                 ) from exc
-
 
             if not review_page.reviews:
                 break
@@ -211,7 +211,6 @@ class ReviewEnrichmentService:
         res = await self.db.execute(stmt)
         db_reviews = list(res.scalars().all())
 
-
         if not db_reviews:
             return SummaryExecutionResult(
                 review_type=review_type,
@@ -264,7 +263,6 @@ class ReviewEnrichmentService:
             review_type=review_type,
             language=language,
         )
-
 
         # 5. Check if summary already exists with same fingerprint
         stmt_sum = select(GameReviewSummary).where(
@@ -348,7 +346,6 @@ class ReviewEnrichmentService:
             existing_summary.updated_at = now
             await self.db.flush()
             summary_id = existing_summary.id
-
 
         # 8. Update game cache field
         if review_type == "critic":

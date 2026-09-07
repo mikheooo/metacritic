@@ -7,6 +7,7 @@ from sqlalchemy.sql import func
 
 class TimestampMixin:
     """Mixin for models requiring created_at and updated_at timestamps."""
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

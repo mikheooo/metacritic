@@ -14,4 +14,3 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for injecting async SQLAlchemy sessions into route handlers."""
     async for session in get_async_db():
         yield session
-

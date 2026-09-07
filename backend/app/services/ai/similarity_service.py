@@ -87,7 +87,11 @@ class SimilarGamesService:
         for cand in candidates:
             # cand.embedding on SQLite is deserialized as a list or string
             vec_cand = cand.embedding if isinstance(cand.embedding, list) else list(cand.embedding)
-            vec_src = src_emb.embedding if isinstance(src_emb.embedding, list) else list(src_emb.embedding)
+            vec_src = (
+                src_emb.embedding
+                if isinstance(src_emb.embedding, list)
+                else list(src_emb.embedding)
+            )
             sim = _cosine_similarity_python(vec_src, vec_cand)
             scored.append((cand.game_id, sim))
 

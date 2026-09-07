@@ -13,9 +13,15 @@ logger = logging.getLogger(__name__)
 
 
 class LLMSummaryResponse(BaseModel):
-    summary: str = Field(description="2-4 sentences synthesizing the overall sentiment and consensus.")
-    likes: list[str] = Field(description="Exactly 3 key positive aspects or strengths highlighted in reviews.")
-    dislikes: list[str] = Field(description="Exactly 3 key criticisms, flaws, or drawbacks highlighted in reviews.")
+    summary: str = Field(
+        description="2-4 sentences synthesizing the overall sentiment and consensus."
+    )
+    likes: list[str] = Field(
+        description="Exactly 3 key positive aspects or strengths highlighted in reviews."
+    )
+    dislikes: list[str] = Field(
+        description="Exactly 3 key criticisms, flaws, or drawbacks highlighted in reviews."
+    )
 
 
 class ReviewSummaryResult(BaseModel):
@@ -45,8 +51,7 @@ class ReviewSummarizer(Protocol):
         review_type: str,
         reviews: Sequence[ReviewForSummary],
         fingerprint: str,
-    ) -> ReviewSummaryResult:
-        ...
+    ) -> ReviewSummaryResult: ...
 
 
 def _build_system_prompt(language: str = "ru") -> str:
@@ -69,7 +74,9 @@ CRITICAL SECURITY AND INTEGRITY RULES:
 - {lang_instruction}"""
 
 
-def _build_user_prompt(game_title: str, review_type: str, reviews: Sequence[ReviewForSummary]) -> str:
+def _build_user_prompt(
+    game_title: str, review_type: str, reviews: Sequence[ReviewForSummary]
+) -> str:
     source_label = "professional critic" if review_type == "critic" else "community player/user"
     reviews_formatted = []
     for i, r in enumerate(reviews, 1):
@@ -168,7 +175,10 @@ class OpenAICompatibleReviewSummarizer:
                 dislikes = (
                     parsed.dislikes[:3]
                     if len(parsed.dislikes) >= 3
-                    else (parsed.dislikes + ["Отдельные технические шероховатости"] * (3 - len(parsed.dislikes)))
+                    else (
+                        parsed.dislikes
+                        + ["Отдельные технические шероховатости"] * (3 - len(parsed.dislikes))
+                    )
                 )
 
                 return ReviewSummaryResult(
@@ -200,7 +210,9 @@ class OpenAICompatibleReviewSummarizer:
                 await asyncio.sleep(backoff)
                 backoff *= 2.0
 
-        raise RuntimeError(f"{self.provider} summarization failed after {max_retries} attempts: {last_error}")
+        raise RuntimeError(
+            f"{self.provider} summarization failed after {max_retries} attempts: {last_error}"
+        )
 
 
 class OpenRouterReviewSummarizer(OpenAICompatibleReviewSummarizer):
@@ -257,7 +269,6 @@ class OpenAIReviewSummarizer(OpenAICompatibleReviewSummarizer):
             language=language or settings.SUMMARY_LANGUAGE,
             timeout=timeout,
         )
-
 
 
 class FakeReviewSummarizer:
@@ -376,5 +387,3 @@ def get_summarizer() -> ReviewSummarizer:
         raise ValueError(
             f"Unsupported LLM_PROVIDER '{settings.LLM_PROVIDER}'. Supported providers: 'openrouter', 'openai', 'fake'."
         )
-
-

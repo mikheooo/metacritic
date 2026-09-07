@@ -26,9 +26,7 @@ class Platform(Base):
 
 class GamePlatform(Base):
     __tablename__ = "game_platforms"
-    __table_args__ = (
-        UniqueConstraint("game_id", "platform_id", name="uq_game_platform"),
-    )
+    __table_args__ = (UniqueConstraint("game_id", "platform_id", name="uq_game_platform"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
     game_id: Mapped[int] = mapped_column(
@@ -48,4 +46,6 @@ class GamePlatform(Base):
 
     # Relationships
     game: Mapped["Game"] = relationship("Game", back_populates="game_platforms")
-    platform: Mapped["Platform"] = relationship("Platform", back_populates="game_platforms", lazy="selectin")
+    platform: Mapped["Platform"] = relationship(
+        "Platform", back_populates="game_platforms", lazy="selectin"
+    )

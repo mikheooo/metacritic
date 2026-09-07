@@ -1,4 +1,3 @@
-
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -25,11 +24,8 @@ async def get_games(
     count_stmt = select(func.count(Game.id))
 
     # Base query for fetching games
-    stmt = (
-        select(Game)
-        .options(
-            selectinload(Game.game_platforms).selectinload(GamePlatform.platform),
-        )
+    stmt = select(Game).options(
+        selectinload(Game.game_platforms).selectinload(GamePlatform.platform),
     )
 
     # Join platforms if filtering by platform slug
@@ -101,4 +97,3 @@ async def get_game_by_id(db: AsyncSession, game_id: int) -> Game | None:
     )
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
-

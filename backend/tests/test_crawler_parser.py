@@ -98,7 +98,9 @@ def test_parse_browse_page_2_fixture() -> None:
 def test_parse_game_multi_platform_fixture() -> None:
     """Verify multi-platform parsing, scores, developer, media, and description."""
     html = load_fixture("game_multi_platform.html")
-    details = MetacriticParser.parse_game_details(html, "https://www.metacritic.com/game/elden-ring/")
+    details = MetacriticParser.parse_game_details(
+        html, "https://www.metacritic.com/game/elden-ring/"
+    )
 
     assert details.title == "Elden Ring"
     assert details.external_id == "elden-ring"
@@ -174,7 +176,10 @@ def test_platform_normalization_deterministic() -> None:
     assert normalize_platform_name("pc", slug="pc") == "PC"
     assert normalize_platform_name("PC") == "PC"
     assert normalize_platform_name("xbox-series-x", slug="xbox-series-x") == "Xbox Series X"
-    assert normalize_platform_name("nintendo-switch-2", slug="nintendo-switch-2") == "Nintendo Switch 2"
+    assert (
+        normalize_platform_name("nintendo-switch-2", slug="nintendo-switch-2")
+        == "Nintendo Switch 2"
+    )
     assert normalize_platform_name("playstation-4", slug="playstation-4") == "PlayStation 4"
 
 
@@ -195,7 +200,9 @@ def test_navigation_category_rejection() -> None:
         "See All",
     ]
     for label in bad_labels:
-        assert is_navigation_or_category_label(label) is True, f"Expected {label} to be flagged as navigation"
+        assert is_navigation_or_category_label(label) is True, (
+            f"Expected {label} to be flagged as navigation"
+        )
 
     good_labels = [
         "PlayStation 5",
@@ -209,7 +216,9 @@ def test_navigation_category_rejection() -> None:
         "Android",
     ]
     for label in good_labels:
-        assert is_navigation_or_category_label(label) is False, f"Expected {label} to NOT be flagged as navigation"
+        assert is_navigation_or_category_label(label) is False, (
+            f"Expected {label} to NOT be flagged as navigation"
+        )
 
 
 def test_parse_game_platform_pollution_regression_fixture() -> None:

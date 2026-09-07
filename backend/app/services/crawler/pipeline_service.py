@@ -55,7 +55,7 @@ def sanitize_payload(payload: dict[str, Any] | None) -> dict[str, Any] | None:
         elif isinstance(value, (list, tuple)):
             # If list contains numbers/strings, keep reasonable length
             if len(value) > 10:
-                sanitized[key] = [str(x)[:50] for x in value[:10]] + [f"...+{len(value)-10} more"]
+                sanitized[key] = [str(x)[:50] for x in value[:10]] + [f"...+{len(value) - 10} more"]
             else:
                 sanitized[key] = value
         else:
@@ -214,13 +214,15 @@ class MetacriticPipelineService:
                     daily_state = await self.ingestion_service.get_or_create_daily_state(today)
                     processed_today = await self.ingestion_service.get_processed_ids_today(today)
 
-                    candidates, new_phase, new_page = (
-                        await self.ingestion_service.collect_eligible_candidates(
-                            limit=batch_limit,
-                            processing_date=today,
-                            state=daily_state,
-                            processed_today=processed_today,
-                        )
+                    (
+                        candidates,
+                        new_phase,
+                        new_page,
+                    ) = await self.ingestion_service.collect_eligible_candidates(
+                        limit=batch_limit,
+                        processing_date=today,
+                        state=daily_state,
+                        processed_today=processed_today,
                     )
 
                     crawl_run.discovered_count = len(candidates)
@@ -230,7 +232,11 @@ class MetacriticPipelineService:
                         event_type="discovery_completed",
                         stage=PipelineStage.DISCOVERING.value,
                         message=f"Discovered {len(candidates)} eligible games for processing",
-                        payload={"discovered_count": len(candidates), "phase": new_phase, "page": new_page},
+                        payload={
+                            "discovered_count": len(candidates),
+                            "phase": new_phase,
+                            "page": new_page,
+                        },
                     )
                     await self.db.commit()
 
@@ -343,11 +349,13 @@ class MetacriticPipelineService:
                     c_cnt = 0
                     u_cnt = 0
                     try:
-                        c_cnt = await self.enrichment_service.ingest_reviews_for_type(game, "critic")
+                        c_cnt = await self.enrichment_service.ingest_reviews_for_type(
+                            game, "critic"
+                        )
                         u_cnt = await self.enrichment_service.ingest_reviews_for_type(game, "user")
                         await self.db.commit()
 
-                        crawl_run.reviews_processed_count += (c_cnt + u_cnt)
+                        crawl_run.reviews_processed_count += c_cnt + u_cnt
                         await self.emit_event(
                             crawl_run_id=crawl_run.id,
                             event_type="reviews_completed",

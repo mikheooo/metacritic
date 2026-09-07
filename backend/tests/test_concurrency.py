@@ -27,8 +27,8 @@ async def test_active_run_in_db_blocks_new_manual_run(
     await db_session.commit()
     await db_session.refresh(active_run)
 
-    # Attempt to trigger Run Now
-    resp = await client.post("/api/crawler/run", json={"limit": 20})
+    # Attempt to trigger Run Now without body
+    resp = await client.post("/api/crawler/run")
     assert resp.status_code == 409
     data = resp.json()
     assert "already active" in data["detail"]
@@ -61,9 +61,7 @@ async def test_pending_run_in_db_blocks_new_manual_run(
 
 
 @pytest.mark.asyncio
-async def test_redis_lock_blocks_concurrent_pipeline_execution(
-    db_session: AsyncSession
-) -> None:
+async def test_redis_lock_blocks_concurrent_pipeline_execution(db_session: AsyncSession) -> None:
     """
     Verify distributed lock semantics:
     If CrawlLock is already acquired by another worker/process,
@@ -73,4 +71,17 @@ async def test_redis_lock_blocks_concurrent_pipeline_execution(
     async with CrawlLock():
         service = MetacriticPipelineService(db=db_session)
         with pytest.raises(CrawlAlreadyRunningError):
-            await service.run_pipeline(limit=10, trigger_type="scheduled")
+            await service.run_pipeline(limit=20, trigger_type="scheduled")
+
+
+@pytest.mark.asyncio
+async def test_manual_lock_blocks_scheduled_task_execution(db_session: AsyncSession) -> None:
+    """
+    Verify bidirectional lock collision:
+    When manual pipeline holds distributed lock, scheduled pipeline run
+    is blocked and raises CrawlAlreadyRunningError.
+    """
+    async with CrawlLock():
+        service = MetacriticPipelineService(db=db_session)
+        with pytest.raises(CrawlAlreadyRunningError):
+            await service.run_pipeline(limit=20, trigger_type="scheduled")

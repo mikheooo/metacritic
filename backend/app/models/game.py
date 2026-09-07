@@ -20,7 +20,9 @@ class Game(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
     metacritic_slug: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    metacritic_url: Mapped[str] = mapped_column(String(500), nullable=False, unique=True, index=True)
+    metacritic_url: Mapped[str] = mapped_column(
+        String(500), nullable=False, unique=True, index=True
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     cover_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     developer: Mapped[str | None] = mapped_column(String(255), nullable=True)

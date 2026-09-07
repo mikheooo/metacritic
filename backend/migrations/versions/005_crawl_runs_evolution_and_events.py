@@ -5,6 +5,7 @@ Revises: 004_platform_cleanup
 Create Date: 2026-09-07 14:00:00.000000
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -21,11 +22,25 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     # 1. Add monitoring and lifecycle columns to crawl_runs
     op.add_column("crawl_runs", sa.Column("task_id", sa.String(length=255), nullable=True))
-    op.add_column("crawl_runs", sa.Column("target_count", sa.Integer(), nullable=False, server_default="20"))
-    op.add_column("crawl_runs", sa.Column("discovered_count", sa.Integer(), nullable=False, server_default="0"))
-    op.add_column("crawl_runs", sa.Column("reviews_processed_count", sa.Integer(), nullable=False, server_default="0"))
-    op.add_column("crawl_runs", sa.Column("summaries_generated_count", sa.Integer(), nullable=False, server_default="0"))
-    op.add_column("crawl_runs", sa.Column("embeddings_generated_count", sa.Integer(), nullable=False, server_default="0"))
+    op.add_column(
+        "crawl_runs", sa.Column("target_count", sa.Integer(), nullable=False, server_default="20")
+    )
+    op.add_column(
+        "crawl_runs",
+        sa.Column("discovered_count", sa.Integer(), nullable=False, server_default="0"),
+    )
+    op.add_column(
+        "crawl_runs",
+        sa.Column("reviews_processed_count", sa.Integer(), nullable=False, server_default="0"),
+    )
+    op.add_column(
+        "crawl_runs",
+        sa.Column("summaries_generated_count", sa.Integer(), nullable=False, server_default="0"),
+    )
+    op.add_column(
+        "crawl_runs",
+        sa.Column("embeddings_generated_count", sa.Integer(), nullable=False, server_default="0"),
+    )
     op.add_column("crawl_runs", sa.Column("current_stage", sa.String(length=50), nullable=True))
     op.add_column(
         "crawl_runs",
@@ -36,8 +51,12 @@ def upgrade() -> None:
             nullable=True,
         ),
     )
-    op.add_column("crawl_runs", sa.Column("current_game_title", sa.String(length=255), nullable=True))
-    op.add_column("crawl_runs", sa.Column("heartbeat_at", sa.DateTime(timezone=True), nullable=True))
+    op.add_column(
+        "crawl_runs", sa.Column("current_game_title", sa.String(length=255), nullable=True)
+    )
+    op.add_column(
+        "crawl_runs", sa.Column("heartbeat_at", sa.DateTime(timezone=True), nullable=True)
+    )
     op.add_column("crawl_runs", sa.Column("error_summary", sa.Text(), nullable=True))
 
     op.create_index(op.f("ix_crawl_runs_task_id"), "crawl_runs", ["task_id"], unique=False)
@@ -51,16 +70,26 @@ def upgrade() -> None:
         sa.Column("stage", sa.String(length=50), nullable=False),
         sa.Column("game_id", sa.Integer(), nullable=True),
         sa.Column("message", sa.Text(), nullable=False),
-        sa.Column("payload", sa.JSON().with_variant(postgresql.JSONB(), "postgresql"), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "payload", sa.JSON().with_variant(postgresql.JSONB(), "postgresql"), nullable=True
+        ),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["crawl_run_id"], ["crawl_runs.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["game_id"], ["games.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_crawl_run_events_id"), "crawl_run_events", ["id"], unique=False)
-    op.create_index(op.f("ix_crawl_run_events_crawl_run_id"), "crawl_run_events", ["crawl_run_id"], unique=False)
-    op.create_index(op.f("ix_crawl_run_events_event_type"), "crawl_run_events", ["event_type"], unique=False)
-    op.create_index("ix_crawl_run_events_run_id_id", "crawl_run_events", ["crawl_run_id", "id"], unique=False)
+    op.create_index(
+        op.f("ix_crawl_run_events_crawl_run_id"), "crawl_run_events", ["crawl_run_id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_crawl_run_events_event_type"), "crawl_run_events", ["event_type"], unique=False
+    )
+    op.create_index(
+        "ix_crawl_run_events_run_id_id", "crawl_run_events", ["crawl_run_id", "id"], unique=False
+    )
 
 
 def downgrade() -> None:

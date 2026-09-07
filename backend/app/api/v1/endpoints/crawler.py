@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
 from app.core.config import settings
 from app.models.crawl import CrawlRun, CrawlRunEvent
-from app.schemas.crawl import PipelineStage, RunNowRequest, RunNowResponse
+from app.schemas.crawl import PipelineStage, RunNowResponse
 from app.services.crawler.lock import LOCK_KEY
 from app.workers.tasks import process_metacritic_pipeline
 
@@ -21,16 +21,15 @@ router = APIRouter(prefix="/crawler", tags=["Crawler"])
 
 @router.post("/run", status_code=status.HTTP_202_ACCEPTED, response_model=RunNowResponse)
 async def trigger_run_now(
-    payload: RunNowRequest | None = None,
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """
     Manually trigger an on-demand Metacritic pipeline run.
+    Always dispatches canonical production batch limit (settings.CRAWL_BATCH_LIMIT = 20).
     Enforces concurrency protection: if a run is currently pending or running,
     or the Redis distributed lock is held, returns HTTP 409 Conflict without creating a fake run.
     """
-    limit = payload.limit if payload else settings.CRAWL_BATCH_LIMIT
-    limit = min(max(1, limit), 20)  # Safe bounds enforcement
+    limit = settings.CRAWL_BATCH_LIMIT
 
     # 1. Check for existing active runs in database
     stmt = (
@@ -70,7 +69,9 @@ async def trigger_run_now(
                 },
             )
     except Exception as exc:
-        logger.warning("Could not check Redis lock status directly (%s); proceeding with DB guard", exc)
+        logger.warning(
+            "Could not check Redis lock status directly (%s); proceeding with DB guard", exc
+        )
 
     # 3. Create pending CrawlRun and initial event
     run = CrawlRun(

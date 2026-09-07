@@ -265,4 +265,7 @@ This document describes the foundational architecture of the Metacritic Game Ana
    - Disconnected clients automatically reconnect using the standard `Last-Event-ID` header or query parameter to resume receiving events without loss or duplication.
 5. **Dynamic Platform Discovery**:
    - Platforms on `/games` are dynamically fetched from `GET /api/platforms` based on normalized platforms populated by the ingestion pipeline.
+6. **Production Batch Contract**:
+   - Both Celery Beat and public `Run Now` invocations strictly execute the canonical production batch of 20 games (`settings.CRAWL_BATCH_LIMIT = 20`).
+   - The public HTTP API does not allow user-supplied batch limit overrides. Custom small limits (`limit < 20`) are strictly reserved for developer CLI tooling (`app.cli`) and automated test fixtures.
 

@@ -131,7 +131,7 @@ export const MonitorPage: React.FC = () => {
     setRunNowSuccess(null);
 
     try {
-      const resp = await triggerRunNow(20);
+      const resp = await triggerRunNow();
       setRunNowSuccess(`Run #${resp.run_id} queued successfully.`);
       // Refresh status immediately
       const updated = await fetchMonitorStatus();

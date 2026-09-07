@@ -45,6 +45,7 @@ async def check_celery_worker_status() -> WorkerStatus:
     Check if Celery worker is actively reachable via inspect/ping.
     Runs in a thread executor with a strict 0.8s timeout to ensure non-blocking behavior.
     """
+
     def _ping_sync() -> tuple[bool, list[str]]:
         try:
             res = celery_app.control.ping(timeout=0.8)
@@ -154,15 +155,13 @@ async def get_monitor_run(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Retrieve full details of a specific crawl run, including its chronological events."""
-    stmt = (
-        select(CrawlRun)
-        .options(selectinload(CrawlRun.events))
-        .where(CrawlRun.id == run_id)
-    )
+    stmt = select(CrawlRun).options(selectinload(CrawlRun.events)).where(CrawlRun.id == run_id)
     res = await db.execute(stmt)
     run = res.scalar_one_or_none()
     if not run:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"CrawlRun #{run_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"CrawlRun #{run_id} not found"
+        )
     return CrawlRunRead.model_validate(run)
 
 
@@ -220,7 +219,9 @@ async def monitor_stream(
                     scheduler=SchedulerStatus(
                         enabled=settings.CRAWL_SCHEDULE_ENABLED,
                         timezone=settings.CELERY_TIMEZONE,
-                        next_run_at=get_deterministic_next_run() if settings.CRAWL_SCHEDULE_ENABLED else None,
+                        next_run_at=get_deterministic_next_run()
+                        if settings.CRAWL_SCHEDULE_ENABLED
+                        else None,
                     ),
                     worker=worker,
                     active_run=CrawlRunRead.model_validate(active_run) if active_run else None,

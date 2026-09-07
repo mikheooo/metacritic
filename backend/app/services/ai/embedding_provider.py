@@ -28,8 +28,7 @@ class EmbeddingProvider(Protocol):
     model: str
     dimensions: int
 
-    async def embed(self, text: str) -> EmbeddingResult:
-        ...
+    async def embed(self, text: str) -> EmbeddingResult: ...
 
 
 class OpenRouterEmbeddingProvider:
@@ -44,7 +43,9 @@ class OpenRouterEmbeddingProvider:
         max_retries: int = 3,
     ) -> None:
         if not api_key or not api_key.strip():
-            raise ValueError("OPENROUTER_API_KEY is missing or empty. Cannot initialize OpenRouterEmbeddingProvider.")
+            raise ValueError(
+                "OPENROUTER_API_KEY is missing or empty. Cannot initialize OpenRouterEmbeddingProvider."
+            )
 
         self.api_key = api_key.strip()
         self.base_url = base_url.rstrip("/")
@@ -72,10 +73,14 @@ class OpenRouterEmbeddingProvider:
                     model=self.model,
                 )
                 if not response.data or len(response.data) == 0:
-                    raise ValueError(f"Empty embedding data returned by {self.provider} ({self.model})")
+                    raise ValueError(
+                        f"Empty embedding data returned by {self.provider} ({self.model})"
+                    )
 
                 raw_vector = response.data[0].embedding
-                input_tokens = getattr(response.usage, "prompt_tokens", None) or getattr(response.usage, "total_tokens", None)
+                input_tokens = getattr(response.usage, "prompt_tokens", None) or getattr(
+                    response.usage, "total_tokens", None
+                )
 
                 return EmbeddingResult(
                     vector=raw_vector,
@@ -98,7 +103,9 @@ class OpenRouterEmbeddingProvider:
                     await asyncio.sleep(delay)
                     delay *= 2
             except Exception as exc:
-                logger.error("Non-transient error from embedding provider %s: %s", self.provider, exc)
+                logger.error(
+                    "Non-transient error from embedding provider %s: %s", self.provider, exc
+                )
                 raise
 
         raise RuntimeError(

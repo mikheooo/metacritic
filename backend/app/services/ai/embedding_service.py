@@ -240,21 +240,25 @@ class GameEmbeddingService:
                 else:
                     failed_count += 1
 
-                results.append({
-                    "game_id": gid,
-                    "status": res_single.status,
-                    "provider": res_single.provider,
-                    "model": res_single.model,
-                    "dimensions": res_single.dimensions,
-                    "error": res_single.error,
-                })
+                results.append(
+                    {
+                        "game_id": gid,
+                        "status": res_single.status,
+                        "provider": res_single.provider,
+                        "model": res_single.model,
+                        "dimensions": res_single.dimensions,
+                        "error": res_single.error,
+                    }
+                )
             except Exception as exc:
                 failed_count += 1
-                results.append({
-                    "game_id": gid,
-                    "status": "failed",
-                    "error": str(exc),
-                })
+                results.append(
+                    {
+                        "game_id": gid,
+                        "status": "failed",
+                        "error": str(exc),
+                    }
+                )
 
         return {
             "total": len(game_ids),

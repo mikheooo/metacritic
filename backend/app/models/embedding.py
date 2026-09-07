@@ -14,9 +14,7 @@ if TYPE_CHECKING:
 
 class GameEmbedding(Base):
     __tablename__ = "game_embeddings"
-    __table_args__ = (
-        UniqueConstraint("game_id", name="uq_game_embeddings_game_id"),
-    )
+    __table_args__ = (UniqueConstraint("game_id", name="uq_game_embeddings_game_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
     game_id: Mapped[int] = mapped_column(

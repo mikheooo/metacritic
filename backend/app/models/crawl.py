@@ -24,8 +24,12 @@ class CrawlRun(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
     task_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
-    status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)  # pending, running, completed, partial, failed
-    trigger_type: Mapped[str] = mapped_column(String(50), default="manual", nullable=False)  # scheduled, manual
+    status: Mapped[str] = mapped_column(
+        String(50), default="pending", nullable=False
+    )  # pending, running, completed, partial, failed
+    trigger_type: Mapped[str] = mapped_column(
+        String(50), default="manual", nullable=False
+    )  # scheduled, manual
 
     target_count: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
     discovered_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -36,7 +40,9 @@ class CrawlRun(Base):
     summaries_generated_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     embeddings_generated_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
-    current_stage: Mapped[str | None] = mapped_column(String(50), nullable=True)  # queued, discovering, ingesting, reviews, summarizing, embedding, similarity, completed, partial, failed
+    current_stage: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )  # queued, discovering, ingesting, reviews, summarizing, embedding, similarity, completed, partial, failed
     current_game_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("games.id", ondelete="SET NULL"),
@@ -71,9 +77,7 @@ class CrawlRun(Base):
 
 class CrawlRunEvent(Base):
     __tablename__ = "crawl_run_events"
-    __table_args__ = (
-        Index("ix_crawl_run_events_run_id_id", "crawl_run_id", "id"),
-    )
+    __table_args__ = (Index("ix_crawl_run_events_run_id_id", "crawl_run_id", "id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
     crawl_run_id: Mapped[int] = mapped_column(
@@ -109,7 +113,9 @@ class DailyCrawlState(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
     processing_date: Mapped[date] = mapped_column(Date, unique=True, nullable=False, index=True)
-    phase: Mapped[str] = mapped_column(String(50), default="new_releases", nullable=False)  # new_releases, browse
+    phase: Mapped[str] = mapped_column(
+        String(50), default="new_releases", nullable=False
+    )  # new_releases, browse
     browse_page: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     browse_offset: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
@@ -130,7 +136,9 @@ class DailyGameProcessing(Base):
     __tablename__ = "daily_game_processings"
     __table_args__ = (
         # Mandatory invariant: one game cannot be processed more than once per calendar day
-        UniqueConstraint("processing_date", "game_external_id", name="uq_daily_game_processing_date_game"),
+        UniqueConstraint(
+            "processing_date", "game_external_id", name="uq_daily_game_processing_date_game"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -149,4 +157,6 @@ class DailyGameProcessing(Base):
     )
 
     # Relationships
-    crawl_run: Mapped[Optional["CrawlRun"]] = relationship("CrawlRun", back_populates="game_processings")
+    crawl_run: Mapped[Optional["CrawlRun"]] = relationship(
+        "CrawlRun", back_populates="game_processings"
+    )

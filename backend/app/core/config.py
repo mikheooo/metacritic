@@ -1,4 +1,3 @@
-
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -49,6 +48,7 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             if v.startswith("[") and v.endswith("]"):
                 import json
+
                 try:
                     return json.loads(v)  # type: ignore[no-any-return]
                 except Exception:
@@ -99,8 +99,6 @@ class Settings(BaseSettings):
 
     # Future External Integration Keys
     YOUTUBE_API_KEY: str | None = None
-
-
 
 
 settings = Settings()

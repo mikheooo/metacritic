@@ -16,11 +16,11 @@ from app.schemas.crawl import WorkerStatus
 async def test_run_now_creates_pending_run_and_dispatches_task(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    """Verify POST /api/crawler/run creates a pending CrawlRun and returns 202 Accepted."""
+    """Verify POST /api/crawler/run creates a pending CrawlRun and returns 202 Accepted with canonical limit=20."""
     with patch("app.api.v1.endpoints.crawler.process_metacritic_pipeline.delay") as mock_delay:
         mock_delay.return_value.id = "celery-task-12345"
 
-        resp = await client.post("/api/crawler/run", json={"limit": 15})
+        resp = await client.post("/api/crawler/run")
         assert resp.status_code == 202
         data = resp.json()
 
@@ -33,8 +33,11 @@ async def test_run_now_creates_pending_run_and_dispatches_task(
         run = await db_session.get(CrawlRun, data["run_id"])
         assert run is not None
         assert run.status == "pending"
-        assert run.target_count == 15
+        assert run.target_count == 20
         assert run.task_id == "celery-task-12345"
+
+        # Verify Celery dispatch called with limit=20
+        mock_delay.assert_called_once_with(limit=20, trigger_type="manual", run_id=run.id)
 
         # Verify run_queued event was logged
         stmt_ev = select(CrawlRunEvent).where(CrawlRunEvent.crawl_run_id == run.id)
@@ -44,19 +47,27 @@ async def test_run_now_creates_pending_run_and_dispatches_task(
 
 
 @pytest.mark.asyncio
-async def test_run_now_limit_clamping_and_validation(client: AsyncClient) -> None:
-    """Verify limit validation prevents arbitrary enormous batch limits (max 20)."""
-    resp_invalid = await client.post("/api/crawler/run", json={"limit": 100000})
-    assert resp_invalid.status_code == 422
+async def test_run_now_ignores_client_limit_and_preserves_canonical_batch(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Verify POST /api/crawler/run ignores client-supplied limit body and strictly dispatches limit=20."""
+    with patch("app.api.v1.endpoints.crawler.process_metacritic_pipeline.delay") as mock_delay:
+        mock_delay.return_value.id = "celery-task-batch20"
 
-    resp_zero = await client.post("/api/crawler/run", json={"limit": 0})
-    assert resp_zero.status_code == 422
+        # Attempt to supply arbitrary limits
+        resp = await client.post("/api/crawler/run", json={"limit": 2})
+        assert resp.status_code == 202
+        data = resp.json()
+
+        run = await db_session.get(CrawlRun, data["run_id"])
+        assert run is not None
+        # Must be 20, NOT 2!
+        assert run.target_count == 20
+        mock_delay.assert_called_once_with(limit=20, trigger_type="manual", run_id=run.id)
 
 
 @pytest.mark.asyncio
-async def test_monitor_status_endpoint(
-    client: AsyncClient, db_session: AsyncSession
-) -> None:
+async def test_monitor_status_endpoint(client: AsyncClient, db_session: AsyncSession) -> None:
     """Verify GET /api/monitor/status returns deterministic scheduler, worker, and runs."""
     resp = await client.get("/api/monitor/status")
     assert resp.status_code == 200
@@ -159,7 +170,11 @@ async def test_platforms_endpoint_returns_distinct_real_platforms(
     db_session.add_all([p_pc, p_ps5, p_nav])
     await db_session.commit()
 
-    game = Game(title="Test Game", metacritic_slug="test-game", metacritic_url="https://metacritic.com/game/test-game/")
+    game = Game(
+        title="Test Game",
+        metacritic_slug="test-game",
+        metacritic_url="https://metacritic.com/game/test-game/",
+    )
     db_session.add(game)
     await db_session.commit()
 

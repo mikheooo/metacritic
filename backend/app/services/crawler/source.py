@@ -32,4 +32,3 @@ class MetacriticSource(Protocol):
     ) -> ReviewPage:
         """Fetch user reviews page for a game."""
         ...
-

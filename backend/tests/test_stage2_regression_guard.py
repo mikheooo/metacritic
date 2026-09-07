@@ -1,4 +1,4 @@
-﻿from datetime import date
+from datetime import date
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,7 +79,9 @@ async def test_production_limit_20_daily_cursor_semantics(db_session: AsyncSessi
         slug = f"prod-browse-p1-game-{i}"
         source.add_game(slug, f"Prod Browse P1 Game {i}")
         p1.append(
-            GameCandidate(f"Prod Browse P1 Game {i}", f"https://www.metacritic.com/game/{slug}/", slug)
+            GameCandidate(
+                f"Prod Browse P1 Game {i}", f"https://www.metacritic.com/game/{slug}/", slug
+            )
         )
     source.browse_pages[1] = p1
 
@@ -89,7 +91,9 @@ async def test_production_limit_20_daily_cursor_semantics(db_session: AsyncSessi
         slug = f"prod-browse-p2-game-{i}"
         source.add_game(slug, f"Prod Browse P2 Game {i}")
         p2.append(
-            GameCandidate(f"Prod Browse P2 Game {i}", f"https://www.metacritic.com/game/{slug}/", slug)
+            GameCandidate(
+                f"Prod Browse P2 Game {i}", f"https://www.metacritic.com/game/{slug}/", slug
+            )
         )
     source.browse_pages[2] = p2
 

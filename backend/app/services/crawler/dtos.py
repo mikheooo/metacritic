@@ -104,4 +104,3 @@ class ReviewForSummary:
     platform_slug: str | None
     sentiment_category: str
     content_hash: str
-

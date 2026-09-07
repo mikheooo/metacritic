@@ -57,5 +57,7 @@ class SimilarGame(Base):
     )
 
     # Relationships
-    game: Mapped["Game"] = relationship("Game", foreign_keys=[game_id], back_populates="similar_associations")
+    game: Mapped["Game"] = relationship(
+        "Game", foreign_keys=[game_id], back_populates="similar_associations"
+    )
     similar_game: Mapped["Game"] = relationship("Game", foreign_keys=[similar_game_id])

@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +17,6 @@ from app.services.game_service import get_game_by_id, get_games
 router = APIRouter(prefix="/games", tags=["Games"])
 
 
-
 @router.get(
     "",
     response_model=GameListResponse,
@@ -27,8 +25,13 @@ router = APIRouter(prefix="/games", tags=["Games"])
 )
 async def list_games(
     q: str | None = Query(default=None, description="Filter by title (case-insensitive substring)"),
-    platform: str | None = Query(default=None, description="Filter by platform slug (e.g. pc, ps5, switch)"),
-    sort: SortField = Query(default=SortField.CREATED_AT, description="Sort field: metascore, userscore, title, created_at"),
+    platform: str | None = Query(
+        default=None, description="Filter by platform slug (e.g. pc, ps5, switch)"
+    ),
+    sort: SortField = Query(
+        default=SortField.CREATED_AT,
+        description="Sort field: metascore, userscore, title, created_at",
+    ),
     order: SortOrder = Query(default=SortOrder.DESC, description="Sort direction: asc or desc"),
     limit: int = Query(default=20, ge=1, le=100, description="Number of games to return"),
     offset: int = Query(default=0, ge=0, description="Number of games to skip"),
@@ -81,8 +84,12 @@ async def get_game(
         elif s.review_type == "user":
             user_sum = s
 
-    stmt_c = select(func.count(Review.id)).where(Review.game_id == game_id, Review.review_type == "critic")
-    stmt_u = select(func.count(Review.id)).where(Review.game_id == game_id, Review.review_type == "user")
+    stmt_c = select(func.count(Review.id)).where(
+        Review.game_id == game_id, Review.review_type == "critic"
+    )
+    stmt_u = select(func.count(Review.id)).where(
+        Review.game_id == game_id, Review.review_type == "user"
+    )
     critic_count = await db.scalar(stmt_c) or 0
     user_count = await db.scalar(stmt_u) or 0
 
@@ -130,4 +137,3 @@ async def get_game(
     detail.similar_games = similar_items
 
     return detail
-

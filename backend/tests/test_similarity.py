@@ -85,8 +85,12 @@ async def test_synthetic_vector_ranking(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_similarity_never_recommends_self(db_session: AsyncSession):
     """Requirement 17: Source game must NEVER be in its own similar games list."""
-    game_1 = Game(title="Self Check 1", metacritic_slug="self-1", metacritic_url="https://mc.com/self-1")
-    game_2 = Game(title="Self Check 2", metacritic_slug="self-2", metacritic_url="https://mc.com/self-2")
+    game_1 = Game(
+        title="Self Check 1", metacritic_slug="self-1", metacritic_url="https://mc.com/self-1"
+    )
+    game_2 = Game(
+        title="Self Check 2", metacritic_slug="self-2", metacritic_url="https://mc.com/self-2"
+    )
     db_session.add_all([game_1, game_2])
     await db_session.flush()
 
@@ -153,7 +157,9 @@ async def test_similarity_top_k_limit(db_session: AsyncSession):
 async def test_similarity_unembedded_games_excluded(db_session: AsyncSession):
     """Requirement 18: Unembedded games are excluded from results; unembedded source returns []."""
     g_embedded = Game(title="Embedded", metacritic_slug="emb", metacritic_url="https://mc.com/emb")
-    g_unembedded = Game(title="Unembedded", metacritic_slug="unemb", metacritic_url="https://mc.com/unemb")
+    g_unembedded = Game(
+        title="Unembedded", metacritic_slug="unemb", metacritic_url="https://mc.com/unemb"
+    )
     db_session.add_all([g_embedded, g_unembedded])
     await db_session.flush()
 
@@ -189,8 +195,28 @@ async def test_similarity_atomic_refresh_and_idempotency(db_session: AsyncSessio
     db_session.add_all([g1, g2])
     await db_session.flush()
 
-    db_session.add(GameEmbedding(game_id=g1.id, embedding=[1.0, 0.0], provider="fake", model="m", dimensions=2, input_fingerprint="f1", input_version="v1"))
-    db_session.add(GameEmbedding(game_id=g2.id, embedding=[0.9, 0.1], provider="fake", model="m", dimensions=2, input_fingerprint="f2", input_version="v1"))
+    db_session.add(
+        GameEmbedding(
+            game_id=g1.id,
+            embedding=[1.0, 0.0],
+            provider="fake",
+            model="m",
+            dimensions=2,
+            input_fingerprint="f1",
+            input_version="v1",
+        )
+    )
+    db_session.add(
+        GameEmbedding(
+            game_id=g2.id,
+            embedding=[0.9, 0.1],
+            provider="fake",
+            model="m",
+            dimensions=2,
+            input_fingerprint="f2",
+            input_version="v1",
+        )
+    )
     await db_session.commit()
 
     service = SimilarGamesService(db=db_session, limit=5)
@@ -216,15 +242,40 @@ async def test_game_detail_api_exposes_similar_games(client: AsyncClient, db_ses
     db_session.add(platform)
 
     g1 = Game(title="Source Game", metacritic_slug="src", metacritic_url="https://mc.com/src")
-    g2 = Game(title="Target Game", metacritic_slug="tgt", metacritic_url="https://mc.com/tgt", cover_url="https://mc.com/cover.jpg")
+    g2 = Game(
+        title="Target Game",
+        metacritic_slug="tgt",
+        metacritic_url="https://mc.com/tgt",
+        cover_url="https://mc.com/cover.jpg",
+    )
     db_session.add_all([g1, g2])
     await db_session.flush()
 
     gp = GamePlatform(id=1, game_id=g2.id, platform_id=platform.id, platform=platform)
     db_session.add(gp)
 
-    db_session.add(GameEmbedding(game_id=g1.id, embedding=[1.0, 0.0], provider="fake", model="m", dimensions=2, input_fingerprint="f1", input_version="v1"))
-    db_session.add(GameEmbedding(game_id=g2.id, embedding=[0.95, 0.05], provider="fake", model="m", dimensions=2, input_fingerprint="f2", input_version="v1"))
+    db_session.add(
+        GameEmbedding(
+            game_id=g1.id,
+            embedding=[1.0, 0.0],
+            provider="fake",
+            model="m",
+            dimensions=2,
+            input_fingerprint="f1",
+            input_version="v1",
+        )
+    )
+    db_session.add(
+        GameEmbedding(
+            game_id=g2.id,
+            embedding=[0.95, 0.05],
+            provider="fake",
+            model="m",
+            dimensions=2,
+            input_fingerprint="f2",
+            input_version="v1",
+        )
+    )
     await db_session.commit()
 
     # Refresh recommendations

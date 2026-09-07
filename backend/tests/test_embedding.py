@@ -129,12 +129,18 @@ def test_compute_embedding_fingerprint_sensitivity():
     t1 = "Title:\nGame A\n\nDescription:\nFirst version"
     t2 = "Title:\nGame A\n\nDescription:\nSecond version"
 
-    fp_base = compute_embedding_fingerprint(t1, "openrouter", "openai/text-embedding-3-small", 1536, "v1")
-    fp_same = compute_embedding_fingerprint(t1, "openrouter", "openai/text-embedding-3-small", 1536, "v1")
+    fp_base = compute_embedding_fingerprint(
+        t1, "openrouter", "openai/text-embedding-3-small", 1536, "v1"
+    )
+    fp_same = compute_embedding_fingerprint(
+        t1, "openrouter", "openai/text-embedding-3-small", 1536, "v1"
+    )
     assert fp_base == fp_same
 
     # Text changed
-    fp_t2 = compute_embedding_fingerprint(t2, "openrouter", "openai/text-embedding-3-small", 1536, "v1")
+    fp_t2 = compute_embedding_fingerprint(
+        t2, "openrouter", "openai/text-embedding-3-small", 1536, "v1"
+    )
     assert fp_base != fp_t2
 
     # Provider changed
@@ -142,15 +148,21 @@ def test_compute_embedding_fingerprint_sensitivity():
     assert fp_base != fp_prov
 
     # Model changed
-    fp_model = compute_embedding_fingerprint(t1, "openrouter", "openai/text-embedding-3-large", 1536, "v1")
+    fp_model = compute_embedding_fingerprint(
+        t1, "openrouter", "openai/text-embedding-3-large", 1536, "v1"
+    )
     assert fp_base != fp_model
 
     # Dimensions changed
-    fp_dim = compute_embedding_fingerprint(t1, "openrouter", "openai/text-embedding-3-small", 512, "v1")
+    fp_dim = compute_embedding_fingerprint(
+        t1, "openrouter", "openai/text-embedding-3-small", 512, "v1"
+    )
     assert fp_base != fp_dim
 
     # Input version changed
-    fp_ver = compute_embedding_fingerprint(t1, "openrouter", "openai/text-embedding-3-small", 1536, "v2")
+    fp_ver = compute_embedding_fingerprint(
+        t1, "openrouter", "openai/text-embedding-3-small", 1536, "v2"
+    )
     assert fp_base != fp_ver
 
 
