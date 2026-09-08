@@ -58,6 +58,20 @@ REJECT_PATTERNS = [
         re.compile(r"\b(unboxing|figure|statue|collector'?s edition unboxing)\b", re.I),
         "unboxing content",
     ),
+    (
+        re.compile(r"\b(трейлер|тизер|релизный трейлер|синематик)\b", re.I),
+        "trailer/teaser content",
+    ),
+    (
+        re.compile(r"\b(саундтрек|музыка|ост)\b", re.I),
+        "music/soundtrack content",
+    ),
+    (
+        re.compile(r"\b(обзор|мнение|стоит ли покупать|стоит ли играть)\b", re.I),
+        "review/critique content",
+    ),
+    (re.compile(r"\b(реакция|реагирует)\b", re.I), "reaction content"),
+    (re.compile(r"\b(распаковка)\b", re.I), "unboxing content"),
 ]
 
 # Positive gameplay/Let's Play patterns
@@ -71,6 +85,12 @@ POSITIVE_PATTERNS = [
     re.compile(r"\b(part\s*\d+|ep\s*\d+|episode\s*\d+)\b", re.I),
     re.compile(r"\b(stream|vod|live stream)\b", re.I),
     re.compile(r"\b(blind run|blind playthrough)\b", re.I),
+    re.compile(r"\b(прохождение)\b", re.I),
+    re.compile(r"\b(геймплей)\b", re.I),
+    re.compile(r"\b(летсплей)\b", re.I),
+    re.compile(r"\b(стрим|прямой эфир)\b", re.I),
+    re.compile(r"\b(полное прохождение)\b", re.I),
+    re.compile(r"\b(часть\s*\d+|серия\s*\d+|выпуск\s*\d+)\b", re.I),
 ]
 
 
