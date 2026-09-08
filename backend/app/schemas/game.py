@@ -15,6 +15,7 @@ class GameBase(BaseModel):
     cover_url: str | None = None
     developer: str | None = None
     description: str | None = None
+    description_ru: str | None = None
     trailer_url: str | None = None
     critic_summary: str | None = None
     user_summary: str | None = None

@@ -1,3 +1,9 @@
+from app.services.ai.content_translation_service import (
+    ContentTranslationService,
+    DescriptionTranslationResult,
+    ReviewTranslationStats,
+    compute_text_hash,
+)
 from app.services.ai.embedding_builder import (
     build_game_embedding_text,
     compute_embedding_fingerprint,
@@ -36,6 +42,14 @@ from app.services.ai.summarizer import (
     ReviewSummaryResult,
     get_summarizer,
 )
+from app.services.ai.translator import (
+    ContentTranslator,
+    FakeTranslator,
+    OpenAITranslator,
+    OpenRouterTranslator,
+    get_translator,
+    is_already_russian,
+)
 
 __all__ = [
     "classify_sentiment",
@@ -62,4 +76,14 @@ __all__ = [
     "EmbeddingRefreshResult",
     "GameEmbeddingService",
     "SimilarGamesService",
+    "ContentTranslationService",
+    "DescriptionTranslationResult",
+    "ReviewTranslationStats",
+    "compute_text_hash",
+    "ContentTranslator",
+    "OpenRouterTranslator",
+    "OpenAITranslator",
+    "FakeTranslator",
+    "get_translator",
+    "is_already_russian",
 ]

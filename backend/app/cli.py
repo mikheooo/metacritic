@@ -381,6 +381,176 @@ async def run_backfill_covers_command(
         print("======================================================================")
 
 
+async def run_backfill_russian_content_command(
+    dry_run: bool = False,
+    limit: int | None = None,
+    batch_size: int = 5,
+) -> None:
+    from sqlalchemy import select
+
+    from app.models.game import Game
+    from app.models.review import Review
+    from app.models.summary import GameReviewSummary
+    from app.services.ai import (
+        ContentTranslationService,
+        ReviewEnrichmentService,
+        compute_text_hash,
+        is_already_russian,
+    )
+
+    print("=== BACKFILL RUSSIAN CONTENT ===")
+    print(f"Mode: {'DRY RUN' if dry_run else 'LIVE PERSISTENCE'}")
+    if limit:
+        print(f"Limit: {limit}")
+    print(f"Batch size: {batch_size}")
+    print("-----------------------------------")
+
+    games_processed = 0
+    descriptions_translated = 0
+    reviews_translated = 0
+    summaries_generated = 0
+    skipped_unchanged = 0
+    failed = 0
+
+    async with AsyncSessionLocal() as session:
+        translation_service = ContentTranslationService(db=session)
+        enrichment_service = ReviewEnrichmentService(db=session)
+
+        stmt = select(Game).order_by(Game.id.asc())
+        if limit:
+            stmt = stmt.limit(limit)
+        res = await session.execute(stmt)
+        games = list(res.scalars().all())
+
+        total_games = len(games)
+        print(f"Found {total_games} game(s) to evaluate.")
+
+        for idx, game in enumerate(games, 1):
+            games_processed += 1
+            print(f"[{idx}/{total_games}] Processing '{game.title}' (id: {game.id})...")
+
+            # 1. Description translation
+            if game.description and game.description.strip():
+                cleaned_desc = game.description.strip()
+                desc_hash = compute_text_hash(cleaned_desc)
+                if game.description_ru and game.description_source_hash == desc_hash:
+                    skipped_unchanged += 1
+                elif is_already_russian(cleaned_desc):
+                    if not game.description_ru:
+                        descriptions_translated += 1
+                        if not dry_run:
+                            game.description_ru = cleaned_desc
+                            game.description_source_hash = desc_hash
+                    else:
+                        skipped_unchanged += 1
+                else:
+                    if dry_run:
+                        descriptions_translated += 1
+                    else:
+                        try:
+                            d_res = await translation_service.translate_game_description(game)
+                            if d_res.status in ("translated", "already_russian"):
+                                descriptions_translated += 1
+                            elif d_res.status == "skipped_unchanged":
+                                skipped_unchanged += 1
+                            elif d_res.status == "error":
+                                failed += 1
+                        except Exception as exc:
+                            failed += 1
+                            print(
+                                f"  [Error] Description translation failed for '{game.title}': {exc}"
+                            )
+
+            # 2. Reviews translation (top 10 per type)
+            for r_type in ("critic", "user"):
+                r_stmt = (
+                    select(Review)
+                    .where(
+                        Review.game_id == game.id,
+                        Review.review_type == r_type,
+                        Review.body.is_not(None),
+                        Review.body != "",
+                    )
+                    .order_by(Review.rating.desc().nullslast(), Review.id.asc())
+                    .limit(10)
+                )
+                r_res = await session.execute(r_stmt)
+                reviews = list(r_res.scalars().all())
+
+                for rev in reviews:
+                    if not rev.body or not rev.body.strip():
+                        continue
+                    cleaned_body = rev.body.strip()
+                    rev_hash = compute_text_hash(cleaned_body)
+
+                    if rev.body_ru and rev.body_source_hash == rev_hash:
+                        skipped_unchanged += 1
+                    elif is_already_russian(cleaned_body):
+                        if not rev.body_ru:
+                            reviews_translated += 1
+                            if not dry_run:
+                                rev.body_ru = cleaned_body
+                                rev.body_source_hash = rev_hash
+                        else:
+                            skipped_unchanged += 1
+                    else:
+                        if dry_run:
+                            reviews_translated += 1
+                        else:
+                            try:
+                                translated = await translation_service.translator.translate_text(
+                                    cleaned_body, context_type="review"
+                                )
+                                rev.body_ru = translated.strip()
+                                rev.body_source_hash = rev_hash
+                                reviews_translated += 1
+                            except Exception as exc:
+                                failed += 1
+                                print(f"  [Error] Review {rev.id} translation failed: {exc}")
+
+            # 3. Summaries check / generation
+            for r_type in ("critic", "user"):
+                s_stmt = select(GameReviewSummary).where(
+                    GameReviewSummary.game_id == game.id,
+                    GameReviewSummary.review_type == r_type,
+                )
+                s_res = await session.execute(s_stmt)
+                summary_row = s_res.scalar_one_or_none()
+                if summary_row and summary_row.summary and is_already_russian(summary_row.summary):
+                    skipped_unchanged += 1
+                else:
+                    if dry_run:
+                        summaries_generated += 1
+                    else:
+                        try:
+                            s_exec = await enrichment_service.summarize_game_reviews(game, r_type)
+                            if s_exec.status == "generated":
+                                summaries_generated += 1
+                            elif s_exec.status == "skipped_unchanged":
+                                skipped_unchanged += 1
+                            elif s_exec.status == "error":
+                                failed += 1
+                        except Exception as exc:
+                            failed += 1
+                            print(f"  [Error] {r_type.title()} summary generation failed: {exc}")
+
+            if not dry_run and idx % batch_size == 0:
+                await session.commit()
+                print(f"  [Batch commit] Committed changes up to game {idx}")
+
+        if not dry_run:
+            await session.commit()
+
+    print("-----------------------------------")
+    print(f"games_processed:         {games_processed}")
+    print(f"descriptions_translated: {descriptions_translated}")
+    print(f"reviews_translated:      {reviews_translated}")
+    print(f"summaries_generated:     {summaries_generated}")
+    print(f"skipped_unchanged:       {skipped_unchanged}")
+    print(f"failed:                  {failed}")
+    print("===================================")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Metacritic AI Platform CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -519,6 +689,28 @@ def main() -> None:
         help="Maximum games to check (default: all missing)",
     )
 
+    ru_parser = subparsers.add_parser(
+        "backfill-russian-content",
+        help="Backfill Russian translations for descriptions, reviews, and summaries",
+    )
+    ru_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Simulate backfill without persisting changes to database",
+    )
+    ru_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Maximum games to process (default: all)",
+    )
+    ru_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=5,
+        help="Number of games to process per commit batch (default: 5)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "crawl":
@@ -554,6 +746,14 @@ def main() -> None:
                 dry_run=not args.apply,
                 delay=args.delay,
                 limit=args.limit,
+            )
+        )
+    elif args.command == "backfill-russian-content":
+        asyncio.run(
+            run_backfill_russian_content_command(
+                dry_run=args.dry_run,
+                limit=args.limit,
+                batch_size=args.batch_size,
             )
         )
     else:

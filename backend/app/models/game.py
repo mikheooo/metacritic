@@ -28,6 +28,8 @@ class Game(Base):
     cover_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     developer: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description_ru: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description_source_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     trailer_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     critic_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_summary: Mapped[str | None] = mapped_column(Text, nullable=True)

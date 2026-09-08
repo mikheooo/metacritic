@@ -39,6 +39,8 @@ class Review(Base):
     author: Mapped[str | None] = mapped_column(String(255), nullable=True)
     rating: Mapped[float | None] = mapped_column(Float, nullable=True)
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    body_ru: Mapped[str | None] = mapped_column(Text, nullable=True)
+    body_source_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     source_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

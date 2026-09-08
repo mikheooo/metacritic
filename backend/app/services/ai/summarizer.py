@@ -56,7 +56,7 @@ class ReviewSummarizer(Protocol):
 
 def _build_system_prompt(language: str = "ru") -> str:
     lang_instruction = (
-        "Output all text (summary, likes, dislikes) in Russian."
+        "Return the final answer in natural Russian. Output all text (summary, likes, dislikes) strictly in Russian."
         if language.lower() in ("ru", "russian")
         else "Output all text (summary, likes, dislikes) in English."
     )

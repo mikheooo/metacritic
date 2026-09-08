@@ -10,6 +10,7 @@ class ReviewRead(BaseModel):
     author: str | None = None
     rating: float | None = None
     body: str | None = None
+    body_ru: str | None = None
     platform_id: int | None = None
     source_url: str | None = None
     published_at: datetime | None = None

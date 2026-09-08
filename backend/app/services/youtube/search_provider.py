@@ -89,7 +89,9 @@ class YouTubeDataApiProvider:
         self.api_key = api_key or settings.YOUTUBE_API_KEY
         self.max_results = max_results or settings.YOUTUBE_SEARCH_RESULTS_LIMIT
         self.timeout = timeout
-        self.relevance_language = relevance_language or getattr(settings, "YOUTUBE_RELEVANCE_LANGUAGE", "ru")
+        self.relevance_language: str = str(
+            relevance_language or getattr(settings, "YOUTUBE_RELEVANCE_LANGUAGE", "ru")
+        )
 
     def build_search_query(self, game_title: str) -> str:
         """Deterministic search query builder."""

@@ -19,6 +19,7 @@ export interface Review {
   author: string | null;
   rating: number | null;
   body: string | null;
+  body_ru?: string | null;
   published_at: string | null;
   created_at: string;
 }
@@ -31,6 +32,7 @@ export interface Game {
   cover_url: string | null;
   developer: string | null;
   description: string | null;
+  description_ru?: string | null;
   trailer_url: string | null;
   critic_summary: string | null;
   user_summary: string | null;

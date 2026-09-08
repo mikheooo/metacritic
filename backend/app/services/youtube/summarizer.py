@@ -84,7 +84,7 @@ def prepare_bounded_transcript(text: str, max_chars: int = MAX_TRANSCRIPT_CHARS)
 
 def _build_system_prompt(language: str = "ru") -> str:
     lang_instruction = (
-        "Output all text (summary, key_points, overall_impression) in Russian."
+        "Return the final answer in natural Russian. Output all text (summary, key_points, overall_impression) strictly in Russian."
         if language.lower() in ("ru", "russian")
         else "Output all text (summary, key_points, overall_impression) in English."
     )

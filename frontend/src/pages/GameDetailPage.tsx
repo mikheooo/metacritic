@@ -57,9 +57,13 @@ export const GameDetailPage: React.FC = () => {
   const criticDetail = game.critic_summary_detail;
   const userDetail = game.user_summary_detail;
 
-  const criticReviews = game.reviews.filter((r) => r.review_type === 'critic');
-  const userReviews = game.reviews.filter((r) => r.review_type === 'user');
-  const displayedReviews = activeTab === 'critic' ? criticReviews : userReviews;
+  const allCriticReviews = game.reviews.filter((r) => r.review_type === 'critic');
+  const allUserReviews = game.reviews.filter((r) => r.review_type === 'user');
+  const translatedCriticReviews = allCriticReviews.filter((r) => Boolean(r.body_ru));
+  const translatedUserReviews = allUserReviews.filter((r) => Boolean(r.body_ru));
+
+  const displayedReviews = activeTab === 'critic' ? translatedCriticReviews : translatedUserReviews;
+  const rawReviewsCount = activeTab === 'critic' ? allCriticReviews.length : allUserReviews.length;
 
   const formatDuration = (seconds?: number | null): string | null => {
     if (!seconds) return null;
@@ -172,9 +176,19 @@ export const GameDetailPage: React.FC = () => {
       {/* Description Section */}
       <div className="section-card">
         <h3 className="section-title">Описание игры</h3>
-        <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-          {game.description || 'Описание отсутствует.'}
-        </p>
+        {game.description_ru ? (
+          <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+            {game.description_ru}
+          </p>
+        ) : game.description ? (
+          <p style={{ color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.7 }}>
+            Перевод описания подготавливается…
+          </p>
+        ) : (
+          <p style={{ color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.7 }}>
+            Описание отсутствует.
+          </p>
+        )}
       </div>
 
       {/* AI Summaries Section: Critics Say vs Players Say */}
@@ -220,7 +234,7 @@ export const GameDetailPage: React.FC = () => {
               >
                 {criticDetail
                   ? `${criticDetail.review_count_used} рецензий проанализировано`
-                  : `${criticReviews.length} рецензий`}
+                  : `${allCriticReviews.length} рецензий`}
               </span>
             </div>
 
@@ -309,7 +323,7 @@ export const GameDetailPage: React.FC = () => {
               >
                 {userDetail
                   ? `${userDetail.review_count_used} отзывов проанализировано`
-                  : `${userReviews.length} отзывов`}
+                  : `${allUserReviews.length} отзывов`}
               </span>
             </div>
 
@@ -662,7 +676,7 @@ export const GameDetailPage: React.FC = () => {
                 color: activeTab === 'critic' ? '#fff' : 'var(--text-secondary)',
               }}
             >
-              Критики ({criticReviews.length})
+              Критики ({translatedCriticReviews.length > 0 ? translatedCriticReviews.length : allCriticReviews.length})
             </button>
             <button
               onClick={() => setActiveTab('user')}
@@ -677,14 +691,18 @@ export const GameDetailPage: React.FC = () => {
                 color: activeTab === 'user' ? '#fff' : 'var(--text-secondary)',
               }}
             >
-              Игроки ({userReviews.length})
+              Игроки ({translatedUserReviews.length > 0 ? translatedUserReviews.length : allUserReviews.length})
             </button>
           </div>
         </div>
 
-        {displayedReviews.length === 0 ? (
+        {rawReviewsCount === 0 ? (
           <p style={{ color: 'var(--text-muted)', fontStyle: 'italic', padding: '1rem 0' }}>
             Отзывы {activeTab === 'critic' ? 'критиков' : 'игроков'} для этой игры пока отсутствуют.
+          </p>
+        ) : displayedReviews.length === 0 ? (
+          <p style={{ color: 'var(--text-muted)', fontStyle: 'italic', padding: '1rem 0' }}>
+            Перевод отзывов {activeTab === 'critic' ? 'критиков' : 'игроков'} подготавливается…
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -713,7 +731,7 @@ export const GameDetailPage: React.FC = () => {
                   )}
                 </div>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.6, margin: '0.5rem 0' }}>
-                  {r.body}
+                  {r.body_ru}
                 </p>
               </div>
             ))}

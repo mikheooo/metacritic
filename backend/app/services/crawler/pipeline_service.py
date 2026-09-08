@@ -12,7 +12,12 @@ from app.core.config import settings
 from app.models.crawl import CrawlRun, CrawlRunEvent
 from app.models.game import Game
 from app.schemas.crawl import PipelineStage
-from app.services.ai import GameEmbeddingService, ReviewEnrichmentService, SimilarGamesService
+from app.services.ai import (
+    ContentTranslationService,
+    GameEmbeddingService,
+    ReviewEnrichmentService,
+    SimilarGamesService,
+)
 from app.services.crawler.client import MetacriticClient
 from app.services.crawler.ingestion_service import IngestionService
 from app.services.crawler.lock import CrawlAlreadyRunningError, CrawlLock
@@ -97,6 +102,7 @@ class MetacriticPipelineService:
         embedding_service: GameEmbeddingService | None = None,
         similarity_service: SimilarGamesService | None = None,
         youtube_service: YouTubeEnrichmentService | None = None,
+        translation_service: ContentTranslationService | None = None,
     ) -> None:
         self.db = db
         self.source = source or MetacriticClient()
@@ -107,6 +113,7 @@ class MetacriticPipelineService:
         self.embedding_service = embedding_service or GameEmbeddingService(db=self.db)
         self.similarity_service = similarity_service or SimilarGamesService(db=self.db)
         self.youtube_service = youtube_service or YouTubeEnrichmentService(db=self.db)
+        self.translation_service = translation_service or ContentTranslationService(db=self.db)
 
     async def emit_event(
         self,
@@ -386,6 +393,27 @@ class MetacriticPipelineService:
                             payload={"error": str(exc)},
                         )
                         await self.db.commit()
+
+                    # --- Substage B2: Content Translation (Russian localization) ---
+                    try:
+                        tr_res = await self.translation_service.translate_game_content(
+                            game, limit_reviews_per_type=10
+                        )
+                        await self.db.commit()
+                        logger.info(
+                            "Content translation for '%s': desc=%s, reviews_tr=%s, reviews_skip=%s",
+                            game.title,
+                            tr_res.get("description_status"),
+                            tr_res.get("reviews_translated"),
+                            tr_res.get("reviews_skipped_unchanged"),
+                        )
+                    except Exception as tr_exc:
+                        await self.db.rollback()
+                        logger.warning(
+                            "Non-blocking content translation error for '%s': %s",
+                            game.title,
+                            tr_exc,
+                        )
 
                     # --- Substage C: AI Summarization ---
                     crawl_run.current_stage = PipelineStage.SUMMARIZING.value
