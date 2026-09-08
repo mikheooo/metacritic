@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Game } from '../types';
 import { ScoreBadge } from './ScoreBadge';
+import { ProceduralCover } from './ProceduralCover';
 
 interface GameCardProps {
   game: Game;
@@ -38,23 +39,12 @@ export const GameCard: React.FC<GameCardProps> = ({ game }) => {
           onError={() => setImageError(true)}
         />
       ) : (
-        <div className="game-cover game-cover-placeholder">
-          <svg
-            className="game-cover-placeholder-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <rect x="2" y="6" width="20" height="12" rx="2" />
-            <path d="M6 12h4m-2-2v4" />
-            <circle cx="17" cy="10" r="0.5" fill="currentColor" />
-            <circle cx="15" cy="13" r="0.5" fill="currentColor" />
-          </svg>
-          <span className="game-cover-placeholder-text">No Cover</span>
+        <div className="game-cover" style={{ padding: 0, overflow: 'hidden' }}>
+          <ProceduralCover
+            title={game.title}
+            subtitle={platformNames || game.developer || 'PC'}
+            aspect="card"
+          />
         </div>
       )}
 

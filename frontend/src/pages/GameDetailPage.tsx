@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { fetchGameById } from '../api/client';
 import { GameDetail, Review } from '../types';
 import { ScoreBadge } from '../components/ScoreBadge';
+import { ProceduralCover } from '../components/ProceduralCover';
 
 export const GameDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -90,23 +91,12 @@ export const GameDetailPage: React.FC = () => {
             onError={() => setImageError(true)}
           />
         ) : (
-          <div className="detail-cover detail-cover-placeholder">
-            <svg
-              className="detail-cover-placeholder-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <rect x="2" y="6" width="20" height="12" rx="2" />
-              <path d="M6 12h4m-2-2v4" />
-              <circle cx="17" cy="10" r="0.5" fill="currentColor" />
-              <circle cx="15" cy="13" r="0.5" fill="currentColor" />
-            </svg>
-            <span className="detail-cover-placeholder-text">No Cover Available</span>
+          <div className="detail-cover" style={{ padding: 0, overflow: 'hidden' }}>
+            <ProceduralCover
+              title={game.title}
+              subtitle={game.developer || 'Game'}
+              aspect="detail"
+            />
           </div>
         )}
 
@@ -600,9 +590,10 @@ export const GameDetailPage: React.FC = () => {
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       />
                     ) : (
-                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '2rem' }}>
-                        🎮
-                      </div>
+                      <ProceduralCover
+                        title={sim.title}
+                        aspect="thumb"
+                      />
                     )}
                     <span
                       style={{
