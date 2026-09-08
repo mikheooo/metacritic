@@ -91,11 +91,9 @@ class YouTubeDataApiProvider:
         self.timeout = timeout
         self.relevance_language = relevance_language or getattr(settings, "YOUTUBE_RELEVANCE_LANGUAGE", "ru")
 
-    def build_search_query(self, game_title: str, language: str | None = None) -> str:
+    def build_search_query(self, game_title: str) -> str:
         """Deterministic search query builder."""
         cleaned_title = game_title.strip()
-        if language and language.lower() in ("ru", "russian"):
-            return f'"{cleaned_title}" прохождение gameplay lets play'
         return f'"{cleaned_title}" gameplay lets play'
 
     async def search_lets_plays(self, game: Game) -> list[YouTubeVideoCandidate]:
@@ -104,7 +102,7 @@ class YouTubeDataApiProvider:
                 "YOUTUBE_API_KEY is not configured. YouTube discovery cannot proceed."
             )
 
-        query = self.build_search_query(game.title, language=self.relevance_language)
+        query = self.build_search_query(game.title)
         logger.info(
             "Executing YouTube Data API search for game '%s' (query: %s)", game.title, query
         )
