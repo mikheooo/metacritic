@@ -37,7 +37,7 @@ export const GameDetailPage: React.FC = () => {
     return (
       <div className="loading-state">
         <div className="spinner"></div>
-        <p>Loading game details...</p>
+        <p>Загрузка информации об игре...</p>
       </div>
     );
   }
@@ -45,10 +45,10 @@ export const GameDetailPage: React.FC = () => {
   if (error || !game) {
     return (
       <div className="error-state">
-        <h3>Game not found</h3>
-        <p>{error || 'The requested game could not be found.'}</p>
+        <h2>Игра не найдена</h2>
+        <p>{error || 'Запрошенная игра не найдена в базе данных.'}</p>
         <Link to="/" className="back-btn" style={{ marginTop: '1.5rem', display: 'inline-flex' }}>
-          ← Back to Catalog
+          ← Назад в каталог
         </Link>
       </div>
     );
@@ -65,21 +65,21 @@ export const GameDetailPage: React.FC = () => {
     if (!seconds) return null;
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
-    if (h > 0) return `${h}h ${m}m`;
-    return `${m}m`;
+    if (h > 0) return `${h} ч ${m} мин`;
+    return `${m} мин`;
   };
 
   const formatViews = (views?: number | null): string | null => {
     if (views === null || views === undefined) return null;
-    if (views >= 1_000_000) return `${(views / 1_000_000).toFixed(1)}M views`;
-    if (views >= 1_000) return `${(views / 1_000).toFixed(1)}K views`;
-    return `${views} views`;
+    if (views >= 1_000_000) return `${(views / 1_000_000).toFixed(1)} млн просмотров`;
+    if (views >= 1_000) return `${(views / 1_000).toFixed(1)} тыс. просмотров`;
+    return `${views} просмотров`;
   };
 
   return (
     <div className="detail-page">
       <Link to="/" className="back-btn">
-        ← Back to Catalog
+        ← Назад в каталог
       </Link>
 
       <div className="detail-header">
@@ -94,7 +94,7 @@ export const GameDetailPage: React.FC = () => {
           <div className="detail-cover" style={{ padding: 0, overflow: 'hidden' }}>
             <ProceduralCover
               title={game.title}
-              subtitle={game.developer || 'Game'}
+              subtitle={game.developer || 'Игра'}
               aspect="detail"
             />
           </div>
@@ -103,7 +103,7 @@ export const GameDetailPage: React.FC = () => {
         <div className="detail-info">
           <h1 className="detail-title">{game.title}</h1>
           <p className="detail-meta">
-            Developed by <strong>{game.developer || 'Unknown'}</strong> • Added{' '}
+            Разработчик: <strong>{game.developer || 'Неизвестен'}</strong> • Добавлено:{' '}
             {new Date(game.created_at).toLocaleDateString()}
           </p>
 
@@ -116,11 +116,11 @@ export const GameDetailPage: React.FC = () => {
                 textTransform: 'uppercase',
               }}
             >
-              Platforms & Scores
+              Платформы и оценки
             </h4>
             {game.game_platforms.length === 0 ? (
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                No platform scores registered yet.
+                Оценки для платформ пока отсутствуют.
               </p>
             ) : (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
@@ -139,11 +139,11 @@ export const GameDetailPage: React.FC = () => {
                   >
                     <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{gp.platform.name}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Meta:</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Критики:</span>
                       <ScoreBadge score={gp.metascore} type="metascore" />
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>User:</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Игроки:</span>
                       <ScoreBadge score={gp.userscore} type="userscore" />
                     </div>
                   </div>
@@ -163,7 +163,7 @@ export const GameDetailPage: React.FC = () => {
                 textDecoration: 'underline',
               }}
             >
-              View on Metacritic ↗
+              Открыть на Metacritic ↗
             </a>
           )}
         </div>
@@ -171,9 +171,9 @@ export const GameDetailPage: React.FC = () => {
 
       {/* Description Section */}
       <div className="section-card">
-        <h3 className="section-title">Overview</h3>
+        <h3 className="section-title">Описание игры</h3>
         <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-          {game.description || 'No description provided.'}
+          {game.description || 'Описание отсутствует.'}
         </p>
       </div>
 
@@ -206,7 +206,7 @@ export const GameDetailPage: React.FC = () => {
               }}
             >
               <h3 className="section-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span>🎯</span> Critics say
+                <span>🎯</span> Мнение критиков
               </h3>
               <span
                 style={{
@@ -219,15 +219,15 @@ export const GameDetailPage: React.FC = () => {
                 }}
               >
                 {criticDetail
-                  ? `${criticDetail.review_count_used} reviews analyzed`
-                  : `${criticReviews.length} reviews`}
+                  ? `${criticDetail.review_count_used} рецензий проанализировано`
+                  : `${criticReviews.length} рецензий`}
               </span>
             </div>
 
             <p style={{ color: 'var(--text-primary)', lineHeight: 1.6, marginBottom: '1.25rem' }}>
               {criticDetail?.summary ||
                 game.critic_summary ||
-                'Critic reviews have not been summarized yet.'}
+                'Саммари рецензий критиков пока формируется.'}
             </p>
 
             {criticDetail && (
@@ -235,7 +235,7 @@ export const GameDetailPage: React.FC = () => {
                 {criticDetail.likes && criticDetail.likes.length > 0 && (
                   <div>
                     <h5 style={{ color: '#22c55e', fontSize: '0.85rem', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Key Strengths (Likes)
+                      Ключевые достоинства
                     </h5>
                     <ul style={{ listStyle: 'none', paddingLeft: 0, display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                       {criticDetail.likes.map((like, idx) => (
@@ -251,7 +251,7 @@ export const GameDetailPage: React.FC = () => {
                 {criticDetail.dislikes && criticDetail.dislikes.length > 0 && (
                   <div>
                     <h5 style={{ color: '#ef4444', fontSize: '0.85rem', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Key Drawbacks (Dislikes)
+                      Ключевые недостатки
                     </h5>
                     <ul style={{ listStyle: 'none', paddingLeft: 0, display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                       {criticDetail.dislikes.map((dislike, idx) => (
@@ -269,8 +269,8 @@ export const GameDetailPage: React.FC = () => {
 
           {criticDetail && (
             <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)', fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Provider: {criticDetail.provider} ({criticDetail.model})</span>
-              <span>Updated: {new Date(criticDetail.updated_at).toLocaleDateString()}</span>
+              <span>AI-провайдер: {criticDetail.provider} ({criticDetail.model})</span>
+              <span>Обновлено: {new Date(criticDetail.updated_at).toLocaleDateString()}</span>
             </div>
           )}
         </div>
@@ -295,7 +295,7 @@ export const GameDetailPage: React.FC = () => {
               }}
             >
               <h3 className="section-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span>🎮</span> Players say
+                <span>🎮</span> Мнение игроков
               </h3>
               <span
                 style={{
@@ -308,15 +308,15 @@ export const GameDetailPage: React.FC = () => {
                 }}
               >
                 {userDetail
-                  ? `${userDetail.review_count_used} reviews analyzed`
-                  : `${userReviews.length} reviews`}
+                  ? `${userDetail.review_count_used} отзывов проанализировано`
+                  : `${userReviews.length} отзывов`}
               </span>
             </div>
 
             <p style={{ color: 'var(--text-primary)', lineHeight: 1.6, marginBottom: '1.25rem' }}>
               {userDetail?.summary ||
                 game.user_summary ||
-                'Player reviews have not been summarized yet.'}
+                'Саммари отзывов игроков пока формируется.'}
             </p>
 
             {userDetail && (
@@ -324,7 +324,7 @@ export const GameDetailPage: React.FC = () => {
                 {userDetail.likes && userDetail.likes.length > 0 && (
                   <div>
                     <h5 style={{ color: '#22c55e', fontSize: '0.85rem', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Key Strengths (Likes)
+                      Ключевые достоинства
                     </h5>
                     <ul style={{ listStyle: 'none', paddingLeft: 0, display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                       {userDetail.likes.map((like, idx) => (
@@ -340,7 +340,7 @@ export const GameDetailPage: React.FC = () => {
                 {userDetail.dislikes && userDetail.dislikes.length > 0 && (
                   <div>
                     <h5 style={{ color: '#ef4444', fontSize: '0.85rem', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Key Drawbacks (Dislikes)
+                      Ключевые недостатки
                     </h5>
                     <ul style={{ listStyle: 'none', paddingLeft: 0, display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                       {userDetail.dislikes.map((dislike, idx) => (
@@ -358,8 +358,8 @@ export const GameDetailPage: React.FC = () => {
 
           {userDetail && (
             <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)', fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Provider: {userDetail.provider} ({userDetail.model})</span>
-              <span>Updated: {new Date(userDetail.updated_at).toLocaleDateString()}</span>
+              <span>AI-провайдер: {userDetail.provider} ({userDetail.model})</span>
+              <span>Обновлено: {new Date(userDetail.updated_at).toLocaleDateString()}</span>
             </div>
           )}
         </div>
@@ -379,16 +379,16 @@ export const GameDetailPage: React.FC = () => {
         >
           <span style={{ fontSize: '1.25rem' }}>📺</span>
           <h3 className="section-title" style={{ margin: 0 }}>
-            Popular Let's Play
+            Популярное видеопрохождение (Let's Play)
           </h3>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
-            YouTube Data API v3 & Speech AI Summary
+            YouTube Data API v3 и AI-анализ
           </span>
         </div>
 
         {!game.lets_play ? (
           <p style={{ color: 'var(--text-muted)', fontStyle: 'italic', padding: '1rem 0' }}>
-            Let's Play analysis is not available yet.
+            Видеопрохождение пока не добавлено.
           </p>
         ) : (
           <div>
@@ -434,7 +434,7 @@ export const GameDetailPage: React.FC = () => {
                       color: 'var(--text-muted)',
                     }}
                   >
-                    No Thumbnail
+                    Превью отсутствует
                   </div>
                 )}
                 {game.lets_play.duration_seconds && (
@@ -463,7 +463,7 @@ export const GameDetailPage: React.FC = () => {
                 </h4>
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                   {game.lets_play.channel_title && (
-                    <span>By <strong>{game.lets_play.channel_title}</strong></span>
+                    <span>Канал: <strong>{game.lets_play.channel_title}</strong></span>
                   )}
                   {game.lets_play.view_count !== null && (
                     <span>• {formatViews(game.lets_play.view_count)}</span>
@@ -479,7 +479,7 @@ export const GameDetailPage: React.FC = () => {
                         fontWeight: 600,
                       }}
                     >
-                      {game.lets_play.transcript.is_generated ? 'Auto-generated transcript' : 'Manual captions'} ({game.lets_play.transcript.language.toUpperCase()})
+                      {game.lets_play.transcript.is_generated ? 'Автосубтитры' : 'Официальные субтитры'} ({game.lets_play.transcript.language.toUpperCase()})
                     </span>
                   )}
                 </div>
@@ -493,7 +493,7 @@ export const GameDetailPage: React.FC = () => {
                     {game.lets_play.summary.key_points && game.lets_play.summary.key_points.length > 0 && (
                       <div style={{ marginBottom: '1rem' }}>
                         <strong style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                          Key Playthrough Highlights
+                          Ключевые моменты видеопрохождения
                         </strong>
                         <ul style={{ margin: '0.5rem 0 0 0', paddingLeft: '1.25rem', fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                           {game.lets_play.summary.key_points.map((pt, idx) => (
@@ -505,7 +505,7 @@ export const GameDetailPage: React.FC = () => {
                   </div>
                 ) : (
                   <p style={{ color: 'var(--text-muted)', fontStyle: 'italic', margin: '0.75rem 0' }}>
-                    Let's Play found, but a transcript is not available.
+                    Видео найдено, но транскрипт пока недоступен.
                   </p>
                 )}
 
@@ -529,7 +529,7 @@ export const GameDetailPage: React.FC = () => {
                       transition: 'background-color 0.2s ease',
                     }}
                   >
-                    ▶ Watch on YouTube
+                    ▶ Смотреть на YouTube
                   </a>
                 </div>
               </div>
@@ -543,16 +543,16 @@ export const GameDetailPage: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
           <span style={{ fontSize: '1.25rem' }}>🎮</span>
           <h3 className="section-title" style={{ margin: 0 }}>
-            Similar Games
+            Похожие игры
           </h3>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
-            Semantic pgvector cosine matching
+            Семантический pgvector поиск
           </span>
         </div>
 
         {(!game.similar_games || game.similar_games.length === 0) ? (
           <p style={{ color: 'var(--text-muted)', fontStyle: 'italic', padding: '1rem 0' }}>
-            No similar games available yet.
+            Похожие игры пока формируются.
           </p>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1.25rem' }}>
@@ -609,7 +609,7 @@ export const GameDetailPage: React.FC = () => {
                         backdropFilter: 'blur(4px)',
                       }}
                     >
-                      {matchPercent}% match
+                      {matchPercent}% совпадение
                     </span>
                   </div>
                   <div style={{ padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', flex: 1 }}>
@@ -646,7 +646,7 @@ export const GameDetailPage: React.FC = () => {
       <div className="section-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
           <h3 className="section-title" style={{ margin: 0 }}>
-            Individual Reviews
+            Отзывы и рецензии
           </h3>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button
@@ -662,7 +662,7 @@ export const GameDetailPage: React.FC = () => {
                 color: activeTab === 'critic' ? '#fff' : 'var(--text-secondary)',
               }}
             >
-              Critics ({criticReviews.length})
+              Критики ({criticReviews.length})
             </button>
             <button
               onClick={() => setActiveTab('user')}
@@ -677,14 +677,14 @@ export const GameDetailPage: React.FC = () => {
                 color: activeTab === 'user' ? '#fff' : 'var(--text-secondary)',
               }}
             >
-              Players ({userReviews.length})
+              Игроки ({userReviews.length})
             </button>
           </div>
         </div>
 
         {displayedReviews.length === 0 ? (
           <p style={{ color: 'var(--text-muted)', fontStyle: 'italic', padding: '1rem 0' }}>
-            No {activeTab === 'critic' ? 'critic' : 'player'} reviews ingested for this game yet.
+            Отзывы {activeTab === 'critic' ? 'критиков' : 'игроков'} для этой игры пока отсутствуют.
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -704,7 +704,7 @@ export const GameDetailPage: React.FC = () => {
                       score={r.rating}
                       type={r.review_type === 'critic' ? 'metascore' : 'userscore'}
                     />
-                    <strong style={{ fontSize: '0.95rem' }}>{r.author || 'Anonymous'}</strong>
+                    <strong style={{ fontSize: '0.95rem' }}>{r.author || 'Аноним'}</strong>
                   </div>
                   {r.published_at && (
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>

@@ -197,9 +197,9 @@ export const MonitorPage: React.FC = () => {
         }}
       >
         <div>
-          <h1 style={{ fontSize: '1.85rem', fontWeight: 700 }}>System Monitoring</h1>
+          <h1 style={{ fontSize: '1.85rem', fontWeight: 700 }}>Мониторинг системы</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-            Realtime crawl pipeline, hourly scheduler, worker telemetry & event stream
+            Телеметрия сбора данных, планировщика Celery Beat и потока событий в реальном времени
           </p>
         </div>
 
@@ -208,14 +208,14 @@ export const MonitorPage: React.FC = () => {
             className="btn-run-now"
             onClick={handleRunNow}
             disabled={runNowLoading || !!activeRun}
-            title={activeRun ? 'A run is currently in progress' : 'Trigger on-demand pipeline run'}
+            title={activeRun ? 'Сбор уже выполняется' : 'Запустить внеочередной цикл пайплайна'}
           >
             {runNowLoading ? (
-              <>⏳ Queueing Run...</>
+              <>⏳ Запуск пайплайна...</>
             ) : activeRun ? (
-              <>⚙️ Run #{activeRun.id} Active</>
+              <>⚙️ Цикл #{activeRun.id} активен</>
             ) : (
-              <>▶ Run Now</>
+              <>▶ Запустить сбор сейчас</>
             )}
           </button>
         </div>

@@ -54,9 +54,9 @@ export const GamesPage: React.FC = () => {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '1.85rem', fontWeight: 700 }}>Games</h1>
+        <h1 style={{ fontSize: '1.85rem', fontWeight: 700 }}>Каталог игр</h1>
         <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-          {total} {total === 1 ? 'game' : 'games'} found
+          Найдено: {total}
         </span>
       </div>
 
@@ -66,7 +66,7 @@ export const GamesPage: React.FC = () => {
           <input
             type="text"
             className="search-input"
-            placeholder="Search games by title..."
+            placeholder="Поиск игр по названию..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -79,7 +79,7 @@ export const GamesPage: React.FC = () => {
             value={platform}
             onChange={(e) => setPlatform(e.target.value)}
           >
-            <option value="">All Platforms</option>
+            <option value="">Все платформы</option>
             {availablePlatforms.map((p) => (
               <option key={p.slug} value={p.slug}>
                 {p.name}
@@ -95,18 +95,19 @@ export const GamesPage: React.FC = () => {
             value={sortField}
             onChange={(e) => setSortField(e.target.value as any)}
           >
-            <option value="metascore">Metascore</option>
-            <option value="userscore">User Score</option>
-            <option value="created_at">Date Added</option>
-            <option value="title">Title</option>
+            <option value="metascore">По рейтингу Metascore</option>
+            <option value="userscore">По оценке игроков</option>
+            <option value="created_at">По дате добавления</option>
+            <option value="title">По названию (А-Я)</option>
           </select>
 
           <button
             className="order-btn"
             onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-            title={`Order: ${sortOrder.toUpperCase()}`}
+            title={sortOrder === 'asc' ? 'Сортировка: По возрастанию' : 'Сортировка: По убыванию'}
+            style={{ whiteSpace: 'nowrap' }}
           >
-            {sortOrder === 'asc' ? '↑ Asc' : '↓ Desc'}
+            {sortOrder === 'asc' ? '↑ По возрастанию' : '↓ По убыванию'}
           </button>
         </div>
       </div>
@@ -115,21 +116,21 @@ export const GamesPage: React.FC = () => {
       {loading && (
         <div className="loading-state">
           <div className="spinner"></div>
-          <p>Loading games collection...</p>
+          <p>Загрузка каталога игр...</p>
         </div>
       )}
 
       {/* Error state */}
       {!loading && error && (
         <div className="error-state">
-          <h3>Failed to load games</h3>
+          <h3>Не удалось загрузить каталог</h3>
           <p>{error}</p>
           <button
             className="order-btn"
             style={{ marginTop: '1rem' }}
             onClick={() => loadGames()}
           >
-            Retry
+            Повторить
           </button>
         </div>
       )}
@@ -137,11 +138,11 @@ export const GamesPage: React.FC = () => {
       {/* Empty list state */}
       {!loading && !error && games.length === 0 && (
         <div className="empty-state">
-          <h3>No games found</h3>
+          <h3>Игры не найдены</h3>
           <p>
             {searchQuery || platform
-              ? 'Try adjusting your search query or platform filter.'
-              : 'The catalog is currently empty. Ingestion pipeline will populate games in subsequent stages.'}
+              ? 'Попробуйте изменить поисковый запрос или фильтр платформы.'
+              : 'Каталог пока пуст. Игры загружаются фоновым роботом.'}
           </p>
         </div>
       )}

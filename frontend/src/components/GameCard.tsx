@@ -50,7 +50,7 @@ export const GameCard: React.FC<GameCardProps> = ({ game }) => {
 
       <div className="game-card-body">
         <h3 className="game-card-title">{game.title}</h3>
-        <p className="game-card-dev">{game.developer || 'Unknown Developer'}</p>
+        <p className="game-card-dev">{game.developer || 'Неизвестный разработчик'}</p>
         {platformNames && (
           <p className="game-card-dev" style={{ color: 'var(--accent-primary)', marginBottom: '0.5rem' }}>
             {platformNames}
@@ -63,7 +63,7 @@ export const GameCard: React.FC<GameCardProps> = ({ game }) => {
             <ScoreBadge score={bestMetascore} type="metascore" />
           </div>
           <div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', textAlign: 'right' }}>User Score</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', textAlign: 'right' }}>Игроки</span>
             <ScoreBadge score={bestUserscore} type="userscore" />
           </div>
         </div>

@@ -16,13 +16,13 @@ export const Header: React.FC = () => {
             to="/"
             className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}
           >
-            Games
+            Каталог игр
           </Link>
           <Link
             to="/monitor"
             className={`nav-link ${location.pathname === '/monitor' ? 'active' : ''}`}
           >
-            Monitoring
+            Мониторинг
           </Link>
         </nav>
       </div>
