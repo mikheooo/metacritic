@@ -15,7 +15,7 @@ export const GamesPage: React.FC = () => {
   // Filters & Sorting state
   const [searchQuery, setSearchQuery] = useState('');
   const [platform, setPlatform] = useState('');
-  const [sortField, setSortField] = useState<'metascore' | 'userscore' | 'title' | 'created_at'>('created_at');
+  const [sortField, setSortField] = useState<'metascore' | 'userscore' | 'title' | 'created_at'>('metascore');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const loadGames = async () => {
@@ -95,9 +95,9 @@ export const GamesPage: React.FC = () => {
             value={sortField}
             onChange={(e) => setSortField(e.target.value as any)}
           >
-            <option value="created_at">Date Added</option>
             <option value="metascore">Metascore</option>
             <option value="userscore">User Score</option>
+            <option value="created_at">Date Added</option>
             <option value="title">Title</option>
           </select>
 
